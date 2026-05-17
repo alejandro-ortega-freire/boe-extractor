@@ -12,6 +12,7 @@ from source.extract_spaces import extract_spaces_geometric
 from source.extract_equipment import extract_equipment_groups_geometric
 from source.fallbacks import fallback_spaces_from_text, fallback_equipment_from_text
 from source.debug import dump_geometry_debug
+from source.normalization import normalize_document_payload
 from source.word_writer import create_docx
 
 
@@ -65,13 +66,22 @@ if __name__ == "__main__":
             if not equipment_groups:
                 equipment_groups = fallback_equipment_from_text(text)
 
-            create_docx(
+            payload = normalize_document_payload(
                 data,
                 modules,
                 spaces,
                 equipment_groups,
                 duration_text,
-                training_modules,
+                training_modules
+            )
+
+            create_docx(
+                payload["data"],
+                payload["modules"],
+                payload["spaces"],
+                payload["equipment_groups"],
+                payload["duration_text"],
+                payload["training_modules"],
                 output_path
             )
 
