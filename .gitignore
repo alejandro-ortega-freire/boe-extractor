@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+
+# Build ejecutable
+build/
+dist/
+*.spec
+
+# Carpetas temporales del proyecto
+input/*
+!input/.gitkeep
+
+output/*
+!output/.gitkeep
+
+debug_tables/*
+!debug_tables/.gitkeep
+
+# Archivos generados
+*.docx
+*.log
+
+# Entornos virtuales
+venv/
+.venv/
+
+# VSCode
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini
