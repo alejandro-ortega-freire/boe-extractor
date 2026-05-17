@@ -4,6 +4,9 @@ import fitz
 from source.cleaning import clean_line, is_boe_noise
 
 
+CONTROL_BULLET_PREFIX = "\x02\x03"
+
+
 def normalize_ce_code(text):
     text = clean_line(text)
     text = re.sub(r"\bCE\s+(\d+\.\d+)", r"CE\1", text)
@@ -63,6 +66,56 @@ def get_page_lines(page, y_tolerance=3):
         })
 
     return sorted(lines, key=lambda item: (item["y0"], item["x0"]))
+
+
+def normalize_raw_criteria_line(text):
+    text = str(text).strip()
+    has_marker = False
+
+    if text.startswith(CONTROL_BULLET_PREFIX):
+        has_marker = True
+        text = text[len(CONTROL_BULLET_PREFIX):].strip()
+
+    text = re.sub(r"^[-–—○□▫▪◦‣∙\uf0a7]\s*", "", text).strip()
+    text = normalize_ce_code(text)
+    return clean_line(text), has_marker
+
+
+def raw_lines_with_markers(page):
+    entries = []
+
+    for raw_line in page.get_text("text").splitlines():
+        text, has_marker = normalize_raw_criteria_line(raw_line)
+
+        if text:
+            entries.append({
+                "text": text,
+                "has_bullet_marker": has_marker
+            })
+
+    return entries
+
+
+def get_criteria_page_lines(page):
+    raw_entries = raw_lines_with_markers(page)
+    raw_index = 0
+    lines = []
+
+    for line in get_page_lines(page):
+        line = dict(line)
+        line["has_bullet_marker"] = False
+
+        while raw_index < len(raw_entries):
+            entry = raw_entries[raw_index]
+            raw_index += 1
+
+            if entry["text"] == line["text"]:
+                line["has_bullet_marker"] = entry["has_bullet_marker"]
+                break
+
+        lines.append(line)
+
+    return lines
 
 
 def is_module_header(text):
@@ -172,7 +225,7 @@ def parse_criteria_line(
         state["last_bullet_x"] = None
         return
 
-    if text.startswith("-"):
+    if text.startswith("-") or line.get("has_bullet_marker"):
         bullet = re.sub(r"^-+\s*", "", text).strip()
 
         if state["current_subcriterion"] is not None and bullet:
@@ -222,7 +275,7 @@ def extract_criteria_geometric(pdf_path):
     }
 
     for page in doc:
-        for line in get_page_lines(page):
+        for line in get_criteria_page_lines(page):
             text = line["text"]
 
             if "FORMACIÓN DEL CERTIFICADO DE PROFESIONALIDAD" in text:
