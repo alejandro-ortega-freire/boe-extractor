@@ -16,6 +16,8 @@ PROVINCE = "Santa Cruz de Tenerife"
 ACTION_CODE = "24-38/001234"
 ANEXO_FONT_SIZE = 10
 HEADER_ROW_HEIGHT_CM = 1.7
+ANEXO_TABLE_WIDTH_PERCENT = 90
+HOURS_COLUMN_WIDTH = Cm(2.2)
 
 
 def module_code(text):
@@ -65,6 +67,18 @@ def set_cell_shading(cell, fill):
     shading = OxmlElement("w:shd")
     shading.set(qn("w:fill"), fill)
     tc_pr.append(shading)
+
+
+def set_table_width_percent(table, percent):
+    table_pr = table._tbl.tblPr
+    tbl_w = table_pr.find(qn("w:tblW"))
+
+    if tbl_w is None:
+        tbl_w = OxmlElement("w:tblW")
+        table_pr.append(tbl_w)
+
+    tbl_w.set(qn("w:w"), str(percent * 50))
+    tbl_w.set(qn("w:type"), "pct")
 
 
 def set_cell_margins(cell, top=140, bottom=140):
@@ -157,6 +171,7 @@ def add_tabbed_label_line(doc, parts):
 def add_anexo_header(doc, data, duration_text):
     add_centered_heading(doc, "ANEXO III")
     add_centered_heading(doc, "Planificación didáctica")
+    add_centered_heading(doc, "(Modalidad presencial)")
     doc.add_paragraph("")
 
     certificate = (
@@ -210,6 +225,8 @@ def module_rows(module):
 
 
 def add_planning_table(doc, modules):
+    doc.add_paragraph("")
+
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title.paragraph_format.space_before = Pt(8)
@@ -222,6 +239,7 @@ def add_planning_table(doc, modules):
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     table.autofit = False
+    set_table_width_percent(table, ANEXO_TABLE_WIDTH_PERCENT)
 
     headers = [
         "MÓDULOS DEL CERTIFICADO",
@@ -231,7 +249,7 @@ def add_planning_table(doc, modules):
         "FECHAS DE IMPARTICIÓN",
     ]
 
-    widths = [Inches(3.2), Inches(0.7), Inches(3.6), Inches(0.65), Inches(1.8)]
+    widths = [Inches(3.2), HOURS_COLUMN_WIDTH, Inches(3.6), HOURS_COLUMN_WIDTH, Inches(1.8)]
 
     for index, header in enumerate(headers):
         cell = table.rows[0].cells[index]
@@ -286,8 +304,9 @@ def add_practice_table(doc, modules):
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     table.autofit = False
+    set_table_width_percent(table, ANEXO_TABLE_WIDTH_PERCENT)
 
-    widths = [Inches(4.4), Inches(0.9), Inches(5.0)]
+    widths = [Inches(4.6), HOURS_COLUMN_WIDTH, Inches(5.0)]
     headers = [
         "Módulo de formación práctica\nen centros de trabajo",
         "HORAS\nDEL\nMÓDULO",
