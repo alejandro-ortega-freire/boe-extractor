@@ -23,6 +23,18 @@ def module_code(text):
     return match.group(0) if match else ""
 
 
+def is_practice_module(module):
+    return module_code(module.get("text", "")).startswith("MP")
+
+
+def certificate_modules(modules):
+    return [module for module in modules if not is_practice_module(module)]
+
+
+def practice_modules(modules):
+    return [module for module in modules if is_practice_module(module)]
+
+
 def hours_from_text(text):
     found = re.findall(r"\((\d+)\s*horas?\)", text, flags=re.IGNORECASE)
     return found[-1] if found else ""
@@ -228,7 +240,7 @@ def add_planning_table(doc, modules):
 
     table.rows[0].height = Cm(HEADER_ROW_HEIGHT_CM)
 
-    for module in modules:
+    for module in certificate_modules(modules):
         rows = module_rows(module)
         first_row_index = len(table.rows)
 
@@ -262,6 +274,58 @@ def add_planning_table(doc, modules):
     return table
 
 
+def add_practice_table(doc, modules):
+    practices = practice_modules(modules)
+
+    if not practices:
+        return None
+
+    doc.add_paragraph("")
+
+    table = doc.add_table(rows=1, cols=3)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.style = "Table Grid"
+    table.autofit = False
+
+    widths = [Inches(4.4), Inches(0.9), Inches(5.0)]
+    headers = [
+        "Módulo de formación práctica\nen centros de trabajo",
+        "HORAS\nDEL\nMÓDULO",
+        "FECHAS DE REALIZACIÓN",
+    ]
+
+    for index, header in enumerate(headers):
+        cell = table.rows[0].cells[index]
+        set_header_cell(cell, header)
+        cell.width = widths[index]
+
+        if index == 0:
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.italic = True
+
+    table.rows[0].height = Cm(HEADER_ROW_HEIGHT_CM)
+
+    for module in practices:
+        cells = table.add_row().cells
+        values = [
+            title_without_hours(module.get("text", "")),
+            hours_from_text(module.get("text", "")),
+            "",
+        ]
+
+        for index, value in enumerate(values):
+            set_cell_text(
+                cells[index],
+                value,
+                size=ANEXO_FONT_SIZE,
+                align=WD_ALIGN_PARAGRAPH.CENTER if index in (1, 2) else WD_ALIGN_PARAGRAPH.LEFT
+            )
+            cells[index].width = widths[index]
+
+    return table
+
+
 def add_anexo_iii(doc, data, modules, duration_text):
     section = doc.add_section(WD_SECTION.NEW_PAGE)
     section.orientation = WD_ORIENT.LANDSCAPE
@@ -273,3 +337,4 @@ def add_anexo_iii(doc, data, modules, duration_text):
 
     add_anexo_header(doc, data, duration_text)
     add_planning_table(doc, modules)
+    add_practice_table(doc, modules)
