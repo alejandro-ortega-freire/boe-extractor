@@ -75,7 +75,7 @@ def new_bullet(text):
 
 
 def get_bullet_match(text):
-    return re.match(r"^([-–—○□\uf0a7])\s*(.*)", text)
+    return re.match(r"^([-–—○□▫▪◦‣∙\uf0a7])\s*(.*)", text)
 
 
 def normalize_raw_content_line(text):
@@ -86,7 +86,7 @@ def normalize_raw_content_line(text):
         has_marker = True
         text = text[len(CONTROL_BULLET_PREFIX):].strip()
 
-    text = re.sub(r"^[-–—○□\uf0a7]\s*", "", text).strip()
+    text = re.sub(r"^[-–—○□▫▪◦‣∙\uf0a7]\s*", "", text).strip()
     return clean_line(text), has_marker
 
 
