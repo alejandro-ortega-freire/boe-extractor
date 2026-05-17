@@ -5,7 +5,7 @@ def is_boe_noise(line):
     patterns = [
         r"BOLETÍN OFICIAL DEL ESTADO",
         r"^Núm\.?\s*\d+",
-        r"Sec\.?\s*[IVXLC]+",
+        r"^Sec\.?\s*[IVXLC]+\b",
         r"Pág\.?\s*\d+",
         r"cve:",
         r"BOE-A-\d{4}-\d+",
