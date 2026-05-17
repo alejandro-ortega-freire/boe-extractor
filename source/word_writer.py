@@ -6,6 +6,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+from source.anexo_iii_writer import add_anexo_iii
 from source.normalization import normalize_text
 
 
@@ -230,5 +231,7 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
 
         if index < len(training_modules) - 1:
             add_separator_line(doc)
+
+    add_anexo_iii(doc, data, modules, duration_text)
 
     doc.save(output_path)
