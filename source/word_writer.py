@@ -7,10 +7,27 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 
+def xml_safe(text):
+    if text is None:
+        return ""
+
+    text = str(text)
+    return "".join(
+        char
+        for char in text
+        if (
+            char in ("\t", "\n", "\r")
+            or "\u0020" <= char <= "\ud7ff"
+            or "\ue000" <= char <= "\ufffd"
+            or "\U00010000" <= char <= "\U0010ffff"
+        )
+    )
+
+
 def add_paragraph_with_m2_superscript(doc, text):
     p = doc.add_paragraph()
 
-    parts = re.split(r"(m2)", text)
+    parts = re.split(r"(m2)", xml_safe(text))
 
     for part in parts:
         if part == "m2":
@@ -45,6 +62,7 @@ def add_bold_prefix_paragraph(doc, text, left_indent=0):
     p = doc.add_paragraph()
     p.paragraph_format.left_indent = Pt(left_indent)
 
+    text = xml_safe(text)
     match = re.match(r"^(C\d+:|CE\d+\.\d+)\s*(.*)", text)
 
     if match:
@@ -79,7 +97,43 @@ def add_criteria_block(doc, criteria):
             for bullet in subcriterion.get("bullets", []):
                 p = doc.add_paragraph(style="List Bullet")
                 p.paragraph_format.left_indent = Pt(54)
-                p.add_run(bullet)
+                p.add_run(xml_safe(bullet))
+
+
+def add_content_bullet(doc, bullet, level=0):
+    styles = ["List Bullet", "List Bullet 2", "List Bullet 3"]
+    style = styles[min(level, len(styles) - 1)]
+
+    p = doc.add_paragraph(style=style)
+    p.paragraph_format.left_indent = Pt(54 + (level * 18))
+    p.add_run(xml_safe(bullet.get("text", "")))
+
+    for child in bullet.get("children", []):
+        add_content_bullet(doc, child, level + 1)
+
+
+def add_contents_block(doc, contents):
+    if not contents:
+        return
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    p.add_run("Contenidos").bold = True
+
+    for content in contents:
+        p = doc.add_paragraph()
+        p.paragraph_format.left_indent = Pt(18)
+
+        title = xml_safe(content.get("title", ""))
+        match = re.match(r"^(\d+\.)\s*(.*)", title)
+        if match:
+            p.add_run(match.group(1) + " ").bold = True
+            p.add_run(match.group(2)).bold = True
+        else:
+            p.add_run(title).bold = True
+
+        for bullet in content.get("bullets", []):
+            add_content_bullet(doc, bullet)
 
 
 def create_docx(data, modules, spaces, equipment_groups, duration_text, training_modules, output_path):
@@ -89,7 +143,7 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
     normal.font.name = "Calibri"
     normal.font.size = Pt(11)
 
-    title = f"{data['codigo']} - {data['nombre']}".upper()
+    title = xml_safe(f"{data['codigo']} - {data['nombre']}".upper())
 
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -109,7 +163,7 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
     def bold_line(label, value):
         p = doc.add_paragraph()
         p.add_run(label).bold = True
-        p.add_run(value)
+        p.add_run(xml_safe(value))
 
     bold_line("Nombre del Certificado: ", data["nombre"])
     bold_line("Código: ", data["codigo"])
@@ -127,12 +181,12 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
     for i, module in enumerate(modules, 1):
         p = doc.add_paragraph()
         p.paragraph_format.left_indent = Pt(18)
-        p.add_run(f"{i}. {module['text']}")
+        p.add_run(xml_safe(f"{i}. {module['text']}"))
 
         for j, uf in enumerate(module["ufs"]):
             p = doc.add_paragraph()
             p.paragraph_format.left_indent = Pt(54)
-            p.add_run(f"{letters[j]}. {uf}")
+            p.add_run(xml_safe(f"{letters[j]}. {uf}"))
 
     doc.add_paragraph("")
 
@@ -152,10 +206,10 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
 
     for group in equipment_groups:
         p = doc.add_paragraph()
-        p.add_run(group["name"]).bold = True
+        p.add_run(xml_safe(group["name"])).bold = True
 
         for item in group["items"]:
-            doc.add_paragraph(item, style="List Bullet")
+            doc.add_paragraph(xml_safe(item), style="List Bullet")
 
     doc.add_paragraph("")
     doc.add_paragraph("")
@@ -177,11 +231,13 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
             for uf in training_module["ufs"]:
                 p = doc.add_paragraph()
                 p.add_run(f"Unidad formativa {uf['number']}: ").bold = True
-                p.add_run(f"{uf['code']} {uf['name']} ({uf['hours']} horas)")
+                p.add_run(xml_safe(f"{uf['code']} {uf['name']} ({uf['hours']} horas)"))
 
                 add_criteria_block(doc, uf.get("criteria", []))
+                add_contents_block(doc, uf.get("contents", []))
         else:
             add_criteria_block(doc, training_module.get("criteria", []))
+            add_contents_block(doc, training_module.get("contents", []))
 
         if index < len(training_modules) - 1:
             add_separator_line(doc)

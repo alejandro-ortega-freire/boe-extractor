@@ -7,6 +7,7 @@ from source.basic_data import extract_basic_data
 from source.modules import extract_modules, calculate_certificate_duration
 from source.training_section import extract_training_modules
 from source.extract_criteria import extract_criteria_geometric, merge_geometric_criteria
+from source.extract_contents import extract_contents_geometric, merge_geometric_contents
 from source.extract_spaces import extract_spaces_geometric
 from source.extract_equipment import extract_equipment_groups_geometric
 from source.fallbacks import fallback_spaces_from_text, fallback_equipment_from_text
@@ -23,7 +24,7 @@ if __name__ == "__main__":
     ]
 
     if not pdf_files:
-        print("❌ No hay PDFs en la carpeta input.")
+        print("No hay PDFs en la carpeta input.")
     else:
         for pdf_file in pdf_files:
             print(f"Procesando: {pdf_file}")
@@ -47,6 +48,12 @@ if __name__ == "__main__":
                 criteria_by_module
             )
 
+            contents_by_module = extract_contents_geometric(pdf_path)
+            training_modules = merge_geometric_contents(
+                training_modules,
+                contents_by_module
+            )
+
             dump_geometry_debug(pdf_path)
 
             spaces = extract_spaces_geometric(pdf_path)
@@ -68,4 +75,4 @@ if __name__ == "__main__":
                 output_path
             )
 
-            print(f"✅ Generado: {output_path}")
+            print(f"Generado: {output_path}")
