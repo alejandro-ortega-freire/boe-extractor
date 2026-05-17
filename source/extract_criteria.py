@@ -182,12 +182,7 @@ def parse_criteria_line(
 
         return
 
-    if (
-        state["current_subcriterion"] is not None
-        and state["last_bullet"] is not None
-        and state["last_bullet_x"] is not None
-        and line["x0"] > state["last_bullet_x"] + 8
-    ):
+    if state["current_subcriterion"] is not None and state["last_bullet"] is not None:
         bullets = state["current_subcriterion"]["bullets"]
         bullets[-1] = clean_line(bullets[-1] + " " + text)
         state["last_bullet"] = bullets[-1]
