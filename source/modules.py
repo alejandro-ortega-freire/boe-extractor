@@ -6,13 +6,17 @@ def normalize_module_section(section):
     section = clean_line(section)
 
     cut_patterns = [
+        r"\bI\.?\s+PERFIL PROFESIONAL\b",
         r"\bII\.?\s+PERFIL PROFESIONAL\b",
+        r"\bPERFIL PROFESIONAL DEL CERTIFICADO\b",
         r"\bUnidad de competencia\b",
         r"\bVinculación con capacitaciones profesionales\b",
     ]
 
     for pattern in cut_patterns:
         section = re.split(pattern, section, flags=re.IGNORECASE)[0]
+
+    section = re.sub(r"\s+\bI\.\s*$", "", section).strip()
 
     section = re.sub(r"\s+(MF\d{4}_\d:)", r"\n\1", section)
     section = re.sub(r"\s+(MP\d{4}:)", r"\n\1", section)
@@ -35,8 +39,14 @@ def extract_modules(text):
 
     end = None
     for i in range(start, len(lines)):
+        if lines[i].strip() in ("I.", "I"):
+            end = i
+            break
+
         if any(k in lines[i] for k in [
+            "I. PERFIL PROFESIONAL",
             "II. PERFIL PROFESIONAL",
+            "PERFIL PROFESIONAL DEL CERTIFICADO",
             "Unidad de competencia",
             "Vinculación con capacitaciones profesionales"
         ]):

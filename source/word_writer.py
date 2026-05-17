@@ -126,7 +126,7 @@ def add_contents_block(doc, contents):
             add_content_bullet(doc, bullet)
 
 
-def create_docx(data, modules, spaces, equipment_groups, duration_text, training_modules, output_path):
+def create_docx(data, modules, spaces, equipment_groups, duration_text, training_modules, output_path, schedule=None):
     doc = Document()
 
     normal = doc.styles["Normal"]
@@ -232,6 +232,6 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
         if index < len(training_modules) - 1:
             add_separator_line(doc)
 
-    add_anexo_iii(doc, data, modules, duration_text)
+    add_anexo_iii(doc, data, modules, duration_text, schedule)
 
     doc.save(output_path)

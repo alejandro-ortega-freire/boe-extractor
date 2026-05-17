@@ -13,6 +13,7 @@ from source.extract_equipment import extract_equipment_groups_geometric
 from source.fallbacks import fallback_spaces_from_text, fallback_equipment_from_text
 from source.debug import dump_geometry_debug
 from source.normalization import normalize_document_payload
+from source.schedule import calculate_schedule, prompt_schedule_config
 from source.word_writer import create_docx
 
 
@@ -27,6 +28,8 @@ if __name__ == "__main__":
     if not pdf_files:
         print("No hay PDFs en la carpeta input.")
     else:
+        schedule_config = prompt_schedule_config()
+
         for pdf_file in pdf_files:
             print(f"Procesando: {pdf_file}")
 
@@ -74,6 +77,11 @@ if __name__ == "__main__":
                 duration_text,
                 training_modules
             )
+            schedule = calculate_schedule(
+                payload["modules"],
+                schedule_config["session_hours"],
+                schedule_config["start_date"]
+            )
 
             create_docx(
                 payload["data"],
@@ -82,7 +90,8 @@ if __name__ == "__main__":
                 payload["equipment_groups"],
                 payload["duration_text"],
                 payload["training_modules"],
-                output_path
+                output_path,
+                schedule
             )
 
             print(f"Generado: {output_path}")

@@ -6,6 +6,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
+from source.schedule import code_from_text, format_date_range, format_holiday_note
 
 
 PLACEHOLDER_DATES = "FECHAS PENDIENTES"
@@ -16,17 +17,13 @@ PROVINCE = "Santa Cruz de Tenerife"
 ACTION_CODE = "24-38/001234"
 ANEXO_FONT_SIZE = 10
 HEADER_ROW_HEIGHT_CM = 1.7
-ANEXO_TABLE_WIDTH_PERCENT = 90
+ANEXO_TABLE_WIDTH_PERCENT = 97
 HOURS_COLUMN_WIDTH = Cm(2.2)
-
-
-def module_code(text):
-    match = re.search(r"\b(?:MF\d{4}_\d|MP\d{4})\b", text)
-    return match.group(0) if match else ""
+DATES_COLUMN_WIDTH = Cm(5.3)
 
 
 def is_practice_module(module):
-    return module_code(module.get("text", "")).startswith("MP")
+    return code_from_text(module.get("text", "")).startswith("MP")
 
 
 def certificate_modules(modules):
@@ -168,7 +165,20 @@ def add_tabbed_label_line(doc, parts):
     return paragraph
 
 
-def add_anexo_header(doc, data, duration_text):
+def schedule_date_range(schedule):
+    if not schedule:
+        return PLACEHOLDER_DATES
+
+    start = schedule.get("start_date")
+    end = schedule.get("end_date")
+
+    if not start or not end:
+        return PLACEHOLDER_DATES
+
+    return format_date_range(start, end)
+
+
+def add_anexo_header(doc, data, duration_text, schedule=None):
     add_centered_heading(doc, "ANEXO III")
     add_centered_heading(doc, "Planificación didáctica")
     add_centered_heading(doc, "(Modalidad presencial)")
@@ -184,7 +194,7 @@ def add_anexo_header(doc, data, duration_text):
     ])
     add_tabbed_label_line(doc, [
         ("DURACIÓN DEL CERTIFICADO: ", duration_for_anexo(duration_text)),
-        ("FECHAS DE IMPARTICIÓN: ", PLACEHOLDER_DATES),
+        ("FECHAS DE IMPARTICIÓN: ", schedule_date_range(schedule)),
     ])
     add_tabbed_label_line(doc, [
         ("CENTRO DE FORMACIÓN: ", PLACEHOLDER_CENTER),
@@ -196,7 +206,15 @@ def add_anexo_header(doc, data, duration_text):
     ])
 
 
-def module_rows(module):
+def scheduled_text(schedule, text):
+    if not schedule:
+        return ""
+
+    code = code_from_text(text)
+    return schedule.get("dates_by_code", {}).get(code, {}).get("text", "")
+
+
+def module_rows(module, schedule=None):
     module_text = title_without_hours(module.get("text", ""))
     module_hours = hours_from_text(module.get("text", ""))
     ufs = module.get("ufs", [])
@@ -207,7 +225,7 @@ def module_rows(module):
             "module_hours": module_hours,
             "uf": "",
             "uf_hours": "",
-            "dates": "",
+            "dates": scheduled_text(schedule, module.get("text", "")),
         }]
 
     rows = []
@@ -218,13 +236,13 @@ def module_rows(module):
             "module_hours": module_hours,
             "uf": title_without_hours(uf),
             "uf_hours": hours_from_text(uf),
-            "dates": "",
+            "dates": scheduled_text(schedule, uf),
         })
 
     return rows
 
 
-def add_planning_table(doc, modules):
+def add_planning_table(doc, modules, schedule=None):
     doc.add_paragraph("")
 
     title = doc.add_paragraph()
@@ -249,7 +267,7 @@ def add_planning_table(doc, modules):
         "FECHAS DE IMPARTICIÓN",
     ]
 
-    widths = [Inches(3.2), HOURS_COLUMN_WIDTH, Inches(3.6), HOURS_COLUMN_WIDTH, Inches(1.8)]
+    widths = [Inches(3.2), HOURS_COLUMN_WIDTH, Inches(3.6), HOURS_COLUMN_WIDTH, DATES_COLUMN_WIDTH]
 
     for index, header in enumerate(headers):
         cell = table.rows[0].cells[index]
@@ -259,7 +277,7 @@ def add_planning_table(doc, modules):
     table.rows[0].height = Cm(HEADER_ROW_HEIGHT_CM)
 
     for module in certificate_modules(modules):
-        rows = module_rows(module)
+        rows = module_rows(module, schedule)
         first_row_index = len(table.rows)
 
         for row_data in rows:
@@ -292,7 +310,7 @@ def add_planning_table(doc, modules):
     return table
 
 
-def add_practice_table(doc, modules):
+def add_practice_table(doc, modules, schedule=None):
     practices = practice_modules(modules)
 
     if not practices:
@@ -330,7 +348,7 @@ def add_practice_table(doc, modules):
         values = [
             title_without_hours(module.get("text", "")),
             hours_from_text(module.get("text", "")),
-            "",
+            scheduled_text(schedule, module.get("text", "")),
         ]
 
         for index, value in enumerate(values):
@@ -342,10 +360,21 @@ def add_practice_table(doc, modules):
             )
             cells[index].width = widths[index]
 
+    doc.add_paragraph("")
     return table
 
 
-def add_anexo_iii(doc, data, modules, duration_text):
+def add_holiday_note(doc, schedule):
+    if not schedule:
+        return
+
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(6)
+    run = paragraph.add_run(format_holiday_note(schedule))
+    run.font.size = Pt(ANEXO_FONT_SIZE)
+
+
+def add_anexo_iii(doc, data, modules, duration_text, schedule=None):
     section = doc.add_section(WD_SECTION.NEW_PAGE)
     section.orientation = WD_ORIENT.LANDSCAPE
     section.page_width, section.page_height = section.page_height, section.page_width
@@ -354,6 +383,7 @@ def add_anexo_iii(doc, data, modules, duration_text):
     section.left_margin = Inches(0.45)
     section.right_margin = Inches(0.45)
 
-    add_anexo_header(doc, data, duration_text)
-    add_planning_table(doc, modules)
-    add_practice_table(doc, modules)
+    add_anexo_header(doc, data, duration_text, schedule)
+    add_planning_table(doc, modules, schedule)
+    add_practice_table(doc, modules, schedule)
+    add_holiday_note(doc, schedule)
