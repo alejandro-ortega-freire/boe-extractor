@@ -1,4 +1,5 @@
 import os
+import sys
 
 from source.config import INPUT_FOLDER, OUTPUT_FOLDER
 from source.cleaning import clean_text
@@ -19,6 +20,11 @@ from source.word_writer import create_anexo_iii_docx, create_info_docx
 from source.word_writer import add_header_footer
 
 
+def set_runtime_working_directory():
+    if getattr(sys, "frozen", False):
+        os.chdir(os.path.dirname(sys.executable))
+
+
 def safe_path_name(value, fallback):
     text = (value or fallback or "").strip()
     safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in text)
@@ -27,6 +33,7 @@ def safe_path_name(value, fallback):
 
 
 if __name__ == "__main__":
+    set_runtime_working_directory()
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
     pdf_files = [
@@ -111,7 +118,8 @@ if __name__ == "__main__":
                 payload["equipment_groups"],
                 payload["duration_text"],
                 payload["training_modules"],
-                info_output_path
+                info_output_path,
+                schedule_config["teacher_name"]
             )
 
             create_anexo_iii_docx(
@@ -119,7 +127,8 @@ if __name__ == "__main__":
                 payload["modules"],
                 payload["duration_text"],
                 anexo_output_path,
-                schedule
+                schedule,
+                schedule_config["teacher_name"]
             )
 
             print(f"Generado: {info_output_path}")
@@ -144,7 +153,8 @@ if __name__ == "__main__":
                     add_header_footer,
                     schedule_config["copy_subcriteria"],
                     payload["spaces"],
-                    payload["equipment_groups"]
+                    payload["equipment_groups"],
+                    schedule_config["teacher_name"]
                 )
 
                 print(f"Generado: {anexo_iv_output_path}")

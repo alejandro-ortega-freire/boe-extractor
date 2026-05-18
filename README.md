@@ -2,6 +2,8 @@
 
 Aplicación en Python para extraer información de Certificados de Profesionalidad del BOE y generar automáticamente documentos Word estructurados.
 
+Autor: Alejandro Ortega Freire
+
 ## Funcionalidades
 
 - Extracción automática de:

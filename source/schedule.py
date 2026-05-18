@@ -5,6 +5,7 @@ import re
 DEFAULT_SESSION_HOURS = 6
 MIN_SESSION_HOURS = 1
 MAX_SESSION_HOURS = 8
+DEFAULT_TEACHER_NAME = "Docente"
 
 
 def parse_hours(text):
@@ -127,6 +128,11 @@ def prompt_session_hours():
     return DEFAULT_SESSION_HOURS
 
 
+def prompt_teacher_name():
+    value = input(f"Nombre del docente (defecto {DEFAULT_TEACHER_NAME}): ").strip()
+    return value or DEFAULT_TEACHER_NAME
+
+
 def prompt_start_date():
     default = default_start_date()
     value = input(
@@ -161,6 +167,7 @@ def prompt_copy_subcriteria():
 
 def prompt_schedule_config():
     return {
+        "teacher_name": prompt_teacher_name(),
         "session_hours": prompt_session_hours(),
         "start_date": prompt_start_date(),
         "copy_subcriteria": prompt_copy_subcriteria(),

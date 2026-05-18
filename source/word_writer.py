@@ -34,7 +34,7 @@ def clear_paragraph(paragraph):
     paragraph._p.clear_content()
 
 
-def add_header_footer(doc):
+def add_header_footer(doc, teacher_name="Docente"):
     for section in doc.sections:
         section.header.is_linked_to_previous = False
         section.footer.is_linked_to_previous = False
@@ -64,7 +64,7 @@ def add_header_footer(doc):
         right_p = right.paragraphs[0]
         right_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
         right_p.paragraph_format.space_after = Pt(20)
-        run = right_p.add_run("Alejandro Otega Freire")
+        run = right_p.add_run(safe_text(teacher_name))
         run.font.size = Pt(10)
         run.bold = True
 
@@ -187,7 +187,16 @@ def add_contents_block(doc, contents):
             add_content_bullet(doc, bullet)
 
 
-def create_info_docx(data, modules, spaces, equipment_groups, duration_text, training_modules, output_path):
+def create_info_docx(
+    data,
+    modules,
+    spaces,
+    equipment_groups,
+    duration_text,
+    training_modules,
+    output_path,
+    teacher_name="Docente"
+):
     doc = Document()
 
     normal = doc.styles["Normal"]
@@ -293,12 +302,19 @@ def create_info_docx(data, modules, spaces, equipment_groups, duration_text, tra
         if index < len(training_modules) - 1:
             add_separator_line(doc)
 
-    add_header_footer(doc)
+    add_header_footer(doc, teacher_name)
 
     doc.save(output_path)
 
 
-def create_anexo_iii_docx(data, modules, duration_text, output_path, schedule=None):
+def create_anexo_iii_docx(
+    data,
+    modules,
+    duration_text,
+    output_path,
+    schedule=None,
+    teacher_name="Docente"
+):
     doc = Document()
 
     normal = doc.styles["Normal"]
@@ -306,6 +322,6 @@ def create_anexo_iii_docx(data, modules, duration_text, output_path, schedule=No
     normal.font.size = Pt(10)
 
     add_anexo_iii(doc, data, modules, duration_text, schedule, new_page=False)
-    add_header_footer(doc)
+    add_header_footer(doc, teacher_name)
 
     doc.save(output_path)

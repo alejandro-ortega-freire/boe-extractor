@@ -503,7 +503,8 @@ def create_anexo_iv_docx(
     add_header_footer=None,
     copy_subcriteria=False,
     spaces=None,
-    equipment_groups=None
+    equipment_groups=None,
+    teacher_name="Docente"
 ):
     doc = Document()
     configure_page(doc.sections[0])
@@ -518,6 +519,6 @@ def create_anexo_iv_docx(
     if add_header_footer is None:
         from source.word_writer import add_header_footer
 
-    add_header_footer(doc)
+    add_header_footer(doc, teacher_name)
 
     doc.save(output_path)
