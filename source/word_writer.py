@@ -187,7 +187,7 @@ def add_contents_block(doc, contents):
             add_content_bullet(doc, bullet)
 
 
-def create_docx(data, modules, spaces, equipment_groups, duration_text, training_modules, output_path, schedule=None):
+def create_info_docx(data, modules, spaces, equipment_groups, duration_text, training_modules, output_path):
     doc = Document()
 
     normal = doc.styles["Normal"]
@@ -293,7 +293,19 @@ def create_docx(data, modules, spaces, equipment_groups, duration_text, training
         if index < len(training_modules) - 1:
             add_separator_line(doc)
 
-    add_anexo_iii(doc, data, modules, duration_text, schedule)
+    add_header_footer(doc)
+
+    doc.save(output_path)
+
+
+def create_anexo_iii_docx(data, modules, duration_text, output_path, schedule=None):
+    doc = Document()
+
+    normal = doc.styles["Normal"]
+    normal.font.name = "Calibri"
+    normal.font.size = Pt(10)
+
+    add_anexo_iii(doc, data, modules, duration_text, schedule, new_page=False)
     add_header_footer(doc)
 
     doc.save(output_path)

@@ -14,7 +14,14 @@ from source.fallbacks import fallback_spaces_from_text, fallback_equipment_from_
 from source.debug import dump_geometry_debug
 from source.normalization import normalize_document_payload
 from source.schedule import calculate_schedule, prompt_schedule_config
-from source.word_writer import create_docx
+from source.word_writer import create_anexo_iii_docx, create_info_docx
+
+
+def safe_path_name(value, fallback):
+    text = (value or fallback or "").strip()
+    safe = "".join(char if char.isalnum() or char in ("-", "_") else "_" for char in text)
+    safe = safe.strip("_")
+    return safe or fallback
 
 
 if __name__ == "__main__":
@@ -35,7 +42,6 @@ if __name__ == "__main__":
 
             pdf_path = os.path.join(INPUT_FOLDER, pdf_file)
             base_name = os.path.splitext(pdf_file)[0]
-            output_path = os.path.join(OUTPUT_FOLDER, f"resultado_{base_name}.docx")
 
             raw_text = extract_text(pdf_path)
             text = clean_text(raw_text)
@@ -83,15 +89,36 @@ if __name__ == "__main__":
                 schedule_config["start_date"]
             )
 
-            create_docx(
+            certificate_code = safe_path_name(payload["data"].get("codigo"), base_name)
+            certificate_output_folder = os.path.join(OUTPUT_FOLDER, certificate_code)
+            os.makedirs(certificate_output_folder, exist_ok=True)
+
+            info_output_path = os.path.join(
+                certificate_output_folder,
+                f"info_{certificate_code}.docx"
+            )
+            anexo_output_path = os.path.join(
+                certificate_output_folder,
+                f"anexoIII_{certificate_code}.docx"
+            )
+
+            create_info_docx(
                 payload["data"],
                 payload["modules"],
                 payload["spaces"],
                 payload["equipment_groups"],
                 payload["duration_text"],
                 payload["training_modules"],
-                output_path,
+                info_output_path
+            )
+
+            create_anexo_iii_docx(
+                payload["data"],
+                payload["modules"],
+                payload["duration_text"],
+                anexo_output_path,
                 schedule
             )
 
-            print(f"Generado: {output_path}")
+            print(f"Generado: {info_output_path}")
+            print(f"Generado: {anexo_output_path}")

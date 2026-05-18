@@ -374,14 +374,18 @@ def add_holiday_note(doc, schedule):
     run.font.size = Pt(ANEXO_FONT_SIZE)
 
 
-def add_anexo_iii(doc, data, modules, duration_text, schedule=None):
-    section = doc.add_section(WD_SECTION.NEW_PAGE)
+def configure_anexo_section(section):
     section.orientation = WD_ORIENT.LANDSCAPE
     section.page_width, section.page_height = section.page_height, section.page_width
     section.top_margin = Inches(0.45)
     section.bottom_margin = Inches(0.45)
     section.left_margin = Inches(0.45)
     section.right_margin = Inches(0.45)
+
+
+def add_anexo_iii(doc, data, modules, duration_text, schedule=None, new_page=True):
+    section = doc.add_section(WD_SECTION.NEW_PAGE) if new_page else doc.sections[0]
+    configure_anexo_section(section)
 
     add_anexo_header(doc, data, duration_text, schedule)
     add_planning_table(doc, modules, schedule)
