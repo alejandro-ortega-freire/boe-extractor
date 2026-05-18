@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
@@ -25,6 +28,78 @@ WHITE_FILL = "FFFFFF"
 LIGHT_BORDER = "BFBFBF"
 UF_ROW_MIN_HEIGHT = Cm(1.4)
 MAIN_HEADER_ROW_HEIGHT = Cm(2.6)
+SUGGESTION_COLOR = RGBColor(192, 0, 0)
+MIN_BULLETS_TO_SPLIT = 7
+MIN_SPLIT_PART_SIZE = 6
+ASSIGNMENT_WINDOW = 1
+STOPWORDS = {
+    "a", "al", "ante", "asi", "cada", "como", "con", "contra", "de", "del",
+    "desde", "el", "en", "entre", "e", "la", "las", "lo", "los", "o", "para",
+    "por", "que", "se", "segun", "sin", "sobre", "su", "sus", "un", "una",
+    "unas", "unos", "y",
+    "accion", "acciones", "actividad", "actividades", "adecuado", "adecuados",
+    "aplicar", "aplicacion", "aplicaciones", "caracteristicas", "caso",
+    "criterio", "criterios", "datos", "definir", "describir", "determinar",
+    "diferentes", "documento", "documentos", "efectuar", "elaborar",
+    "establecer", "forma", "funcion", "funciones", "identificar", "indicar",
+    "informacion", "mediante", "necesario", "obtener", "procedimiento",
+    "procedimientos", "proceso", "procesos", "realizar", "relacion",
+    "utilizar",
+}
+DOMAIN_SYNONYMS = {
+    "email": ["correo", "electronico", "mensaje"],
+    "correo": ["email", "electronico", "mensaje", "correspondencia"],
+    "correspondencia": ["correo", "mensaje"],
+    "mensaje": ["correo", "correspondencia"],
+    "ofimatica": ["procesador", "textos", "hoja", "calculo", "presentacion"],
+    "procesador": ["texto", "textos", "documento"],
+    "textos": ["procesador", "documento", "redaccion"],
+    "plantilla": ["modelo", "documento"],
+    "plantillas": ["modelo", "documento"],
+    "base": ["datos"],
+    "datos": ["base", "registro"],
+    "hoja": ["calculo"],
+    "calculo": ["hoja"],
+    "presentacion": ["diapositiva", "grafica"],
+    "presentaciones": ["diapositiva", "grafica"],
+    "archivo": ["fichero", "carpeta"],
+    "archivos": ["ficheros", "carpetas"],
+    "carpeta": ["archivo", "fichero"],
+    "carpetas": ["archivos", "ficheros"],
+    "seguridad": ["confidencialidad", "integridad", "proteccion"],
+    "urgencia": ["emergencia"],
+    "urgencias": ["emergencias"],
+    "emergencia": ["urgencia"],
+    "emergencias": ["urgencias"],
+}
+TECHNICAL_EXPRESSIONS = {
+    "base datos",
+    "bases datos",
+    "correo electronico",
+    "hoja calculo",
+    "hojas calculo",
+    "procesador textos",
+    "sistema operativo",
+    "soporte vital",
+    "soporte vital basico",
+    "soporte vital avanzado",
+    "aplicaciones informaticas",
+    "bases datos relacionales",
+    "correo electronico",
+    "firma electronica",
+    "tratamiento textos",
+    "presentaciones graficas",
+}
+NEGATIVE_KEYWORD_GROUPS = [
+    {"correo", "electronico", "mensaje", "correspondencia"},
+    {"texto", "textos", "procesador", "redaccion", "plantilla", "plantillas"},
+    {"calculo", "hoja", "hojas"},
+    {"base", "bases", "datos", "registro", "registros"},
+    {"presentacion", "presentaciones", "diapositiva", "grafica", "graficas"},
+    {"archivo", "archivos", "fichero", "ficheros", "carpeta", "carpetas"},
+    {"seguridad", "confidencialidad", "integridad", "proteccion"},
+    {"urgencia", "urgencias", "emergencia", "emergencias"},
+]
 
 
 def configure_page(section):
@@ -166,6 +241,9 @@ def set_criterion_cell_text(cell, criterion, include_subcriteria=False):
         paragraph.paragraph_format.space_after = Pt(0)
         add_prefixed_text(paragraph, subcriterion.get("text", ""), italic=True)
 
+        for bullet in subcriterion.get("bullets", []):
+            add_hyphen_item(cell, bullet, italic=True)
+
 
 def add_bold_cell_paragraph(cell, text, space_before=0):
     paragraph = cell.add_paragraph()
@@ -186,14 +264,18 @@ def add_cell_text_paragraph(cell, text):
     return paragraph
 
 
-def add_hyphen_item(cell, text):
+def add_hyphen_item(cell, text, level=0, italic=False, color=None):
     paragraph = cell.add_paragraph()
-    paragraph.paragraph_format.left_indent = Pt(7)
+    indent = 7 + (level * 8)
+    paragraph.paragraph_format.left_indent = Pt(indent)
     paragraph.paragraph_format.first_line_indent = Pt(-7)
     paragraph.paragraph_format.space_before = Pt(0)
     paragraph.paragraph_format.space_after = Pt(0)
     run = paragraph.add_run(f"- {text}")
     run.font.size = Pt(ANEXO_IV_FONT_SIZE)
+    run.italic = italic
+    if color:
+        run.font.color.rgb = color
     return paragraph
 
 
@@ -219,6 +301,375 @@ def set_spaces_equipment_cell_text(cell, spaces=None, equipment_groups=None):
 
     for item in equipment_items:
         add_hyphen_item(cell, item)
+
+
+def add_content_bullets(cell, bullets, level=0, color=None):
+    for bullet in bullets or []:
+        text = bullet.get("text", "")
+
+        if text:
+            add_hyphen_item(cell, text, level, color=color)
+
+        add_content_bullets(cell, bullet.get("children", []), level + 1, color=color)
+
+
+def set_contents_cell_text(cell, contents=None, suggested=False):
+    contents = contents or []
+    clear_cell(cell)
+    color = SUGGESTION_COLOR if suggested else None
+
+    if not contents:
+        return
+
+    for index, content in enumerate(contents):
+        title = content.get("title", "")
+
+        if title:
+            paragraph = cell.paragraphs[0] if index == 0 else cell.add_paragraph()
+            paragraph.paragraph_format.space_before = Pt(6 if index else 0)
+            paragraph.paragraph_format.space_after = Pt(0)
+            run = paragraph.add_run(title)
+            run.bold = True
+            run.font.size = Pt(ANEXO_IV_FONT_SIZE)
+            if color:
+                run.font.color.rgb = color
+
+        add_content_bullets(cell, content.get("bullets", []), color=color)
+
+
+def strip_accents(text):
+    normalized = unicodedata.normalize("NFD", str(text or "").lower())
+    return "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+
+
+def keyword_tokens(text):
+    words = re.findall(r"[a-záéíóúüñ0-9]+", strip_accents(text))
+    tokens = [
+        word
+        for word in words
+        if len(word) > 2 and word not in STOPWORDS
+    ]
+    expanded = list(tokens)
+
+    for token in tokens:
+        expanded.extend(DOMAIN_SYNONYMS.get(token, []))
+
+    return expanded
+
+
+def weighted_keywords(text):
+    tokens = keyword_tokens(text)
+    weights = {}
+
+    for token in tokens:
+        weights[token] = weights.get(token, 0) + 1.0
+
+    normalized_text = " ".join(tokens)
+
+    for expression in TECHNICAL_EXPRESSIONS:
+        if expression in normalized_text:
+            weights[expression] = weights.get(expression, 0) + 5.0
+
+    for size, weight in ((2, 2.4), (3, 3.2)):
+        for index in range(0, max(len(tokens) - size + 1, 0)):
+            phrase = " ".join(tokens[index:index + size])
+            weights[phrase] = weights.get(phrase, 0) + weight
+
+    return weights
+
+
+def criterion_keywords(criterion):
+    parts = [criterion.get("text", "")]
+
+    for subcriterion in criterion.get("subcriteria", []):
+        parts.append(subcriterion.get("text", ""))
+        parts.extend(subcriterion.get("bullets", []))
+
+    return weighted_keywords(" ".join(parts))
+
+
+def bullet_plain_text(bullet):
+    parts = [bullet.get("text", "")]
+
+    for child in bullet.get("children", []):
+        parts.append(bullet_plain_text(child))
+
+    return " ".join(part for part in parts if part)
+
+
+def content_segment_text(content, bullet=None):
+    parts = [content.get("title", "")]
+
+    if bullet:
+        parts.append(bullet_plain_text(bullet))
+    else:
+        parts.extend(bullet_plain_text(item) for item in content.get("bullets", []))
+
+    return " ".join(part for part in parts if part)
+
+
+def content_similarity(criteria_weights, text):
+    content_weights = weighted_keywords(text)
+
+    if not criteria_weights or not content_weights:
+        return 0.0
+
+    positive_score = sum(
+        min(weight, criteria_weights.get(token, 0))
+        for token, weight in content_weights.items()
+    )
+    criteria_tokens = set(criteria_weights)
+    content_tokens = set(content_weights)
+    negative_penalty = 0.0
+
+    for group in NEGATIVE_KEYWORD_GROUPS:
+        if criteria_tokens & group:
+            continue
+
+        if content_tokens & group:
+            negative_penalty += 1.5
+
+    return positive_score - negative_penalty
+
+
+def clone_content_with_bullets(content, bullets, suffix=""):
+    title = content.get("title", "")
+
+    if suffix and title:
+        title = f"{title} ({suffix})"
+
+    return {
+        "title": title,
+        "bullets": bullets,
+    }
+
+
+def split_bullets_into_chunks(bullets, max_parts):
+    total = len(bullets)
+
+    if total < MIN_BULLETS_TO_SPLIT:
+        return [bullets]
+
+    parts = min(max_parts, total // MIN_SPLIT_PART_SIZE)
+
+    if parts < 2:
+        return [bullets]
+
+    base_size = total // parts
+    remainder = total % parts
+    chunks = []
+    start = 0
+
+    for index in range(parts):
+        size = base_size + (1 if index < remainder else 0)
+        end = start + size
+        chunks.append(bullets[start:end])
+        start = end
+
+    if any(len(chunk) < MIN_SPLIT_PART_SIZE for chunk in chunks):
+        return [bullets]
+
+    return chunks
+
+
+def split_content_segments(contents, criterion_count=1):
+    segments = []
+
+    for content_index, content in enumerate(contents or []):
+        bullets = content.get("bullets", [])
+
+        if bullets:
+            chunks = split_bullets_into_chunks(bullets, criterion_count)
+            bullet_start = 0
+
+            for chunk in chunks:
+                segments.append({
+                    "content_index": content_index,
+                    "bullet_index": bullet_start,
+                    "content": content,
+                    "bullets": chunk,
+                    "text": " ".join(
+                        content_segment_text(content, bullet)
+                        for bullet in chunk
+                    ),
+                })
+                bullet_start += len(chunk)
+        else:
+            segments.append({
+                "content_index": content_index,
+                "bullet_index": 0,
+                "content": content,
+                "bullets": [],
+                "text": content_segment_text(content),
+            })
+
+    return segments
+
+
+def roman_suffix(index):
+    suffixes = ["I", "II", "III", "IV", "V", "VI"]
+    return suffixes[index] if index < len(suffixes) else str(index + 1)
+
+
+def rebalance_empty_content_assignments(assigned_segments):
+    if not assigned_segments:
+        return assigned_segments
+
+    empty_indexes = [
+        index
+        for index, segments in enumerate(assigned_segments)
+        if not segments
+    ]
+
+    for empty_index in empty_indexes:
+        donors = [
+            index
+            for index, segments in enumerate(assigned_segments)
+            if len(segments) > 1
+        ]
+
+        if not donors:
+            break
+
+        donor_index = min(
+            donors,
+            key=lambda index: (abs(index - empty_index), index > empty_index)
+        )
+
+        if donor_index < empty_index:
+            segment = assigned_segments[donor_index].pop()
+        else:
+            segment = assigned_segments[donor_index].pop(0)
+
+        assigned_segments[empty_index].append(segment)
+
+    return assigned_segments
+
+
+def ensure_all_segments_assigned(assigned_segments, segments):
+    assigned_ids = {
+        id(segment)
+        for criterion_segments in assigned_segments
+        for segment in criterion_segments
+    }
+    missing_segments = [
+        segment
+        for segment in segments
+        if id(segment) not in assigned_ids
+    ]
+
+    if not missing_segments:
+        return assigned_segments
+
+    for segment in missing_segments:
+        expected = round(
+            len(assigned_segments)
+            * segment["content_index"]
+            / max(len({item["content_index"] for item in segments}), 1)
+        )
+        target_index = min(expected, len(assigned_segments) - 1)
+        assigned_segments[target_index].append(segment)
+
+    return assigned_segments
+
+
+def assign_contents_to_criteria(criteria, contents):
+    if not criteria:
+        return []
+
+    if len(criteria) == 1:
+        return [contents or []]
+
+    segments = split_content_segments(contents, len(criteria))
+    assigned_segments = [[] for _ in criteria]
+
+    if not segments:
+        return assigned_segments
+
+    criteria_weights = [criterion_keywords(criterion) for criterion in criteria]
+    min_criterion_index = 0
+
+    for segment_index, segment in enumerate(segments):
+        expected = round(
+            segment_index * (len(criteria) - 1) / max(len(segments) - 1, 1)
+        )
+        best_index = min_criterion_index
+        best_score = None
+
+        lower_bound = max(min_criterion_index, expected - ASSIGNMENT_WINDOW)
+        upper_bound = min(len(criteria) - 1, expected + ASSIGNMENT_WINDOW)
+
+        if lower_bound > upper_bound:
+            lower_bound = min_criterion_index
+            upper_bound = min(len(criteria) - 1, min_criterion_index + ASSIGNMENT_WINDOW)
+
+        for criterion_index in range(lower_bound, upper_bound + 1):
+            similarity = content_similarity(criteria_weights[criterion_index], segment["text"])
+            order_penalty = abs(criterion_index - expected) * 1.25
+            score = similarity - order_penalty
+
+            if best_score is None or score > best_score:
+                best_score = score
+                best_index = criterion_index
+
+        assigned_segments[best_index].append(segment)
+        min_criterion_index = best_index
+
+    assigned_segments = ensure_all_segments_assigned(assigned_segments, segments)
+    assigned_segments = rebalance_empty_content_assignments(assigned_segments)
+    assigned_segments = ensure_all_segments_assigned(assigned_segments, segments)
+
+    part_positions = {}
+    for content_index in sorted({segment["content_index"] for segment in segments}):
+        positions = [
+            criterion_index
+            for criterion_index, criterion_segments in enumerate(assigned_segments)
+            if any(segment["content_index"] == content_index for segment in criterion_segments)
+        ]
+        if len(positions) > 1:
+            part_positions[content_index] = positions
+
+    return [
+        build_contents_from_segments(
+            contents,
+            segments_for_criterion,
+            part_positions,
+            criterion_index
+        )
+        for criterion_index, segments_for_criterion in enumerate(assigned_segments)
+    ]
+
+
+def build_contents_from_segments(contents, segments, part_positions=None, criterion_index=0):
+    if not segments:
+        return []
+
+    part_positions = part_positions or {}
+    content_indices_in_parts = {}
+
+    for segment in segments:
+        content_indices_in_parts.setdefault(segment["content_index"], []).append(segment)
+
+    result = []
+
+    for content_index in sorted(content_indices_in_parts):
+        grouped = sorted(
+            content_indices_in_parts[content_index],
+            key=lambda item: item["bullet_index"]
+        )
+        content = grouped[0]["content"]
+        suffix = ""
+
+        if content_index in part_positions:
+            suffix = roman_suffix(part_positions[content_index].index(criterion_index))
+
+        bullets = []
+        for segment in grouped:
+            bullets.extend(segment["bullets"])
+
+        result.append(clone_content_with_bullets(content, bullets, suffix))
+
+    return result
 
 
 def set_strategy_placeholder_cell_text(cell):
@@ -428,8 +879,10 @@ def add_anexo_iv_table(
 
     if not ufs:
         criteria = module.get("criteria", []) or [{}]
+        contents_by_criterion = assign_contents_to_criteria(criteria, module.get("contents", []))
+        suggested_contents = len(criteria) > 1
 
-        for criterion in criteria:
+        for criterion_index, criterion in enumerate(criteria):
             cells = table.add_row().cells
 
             for index, cell in enumerate(cells):
@@ -440,6 +893,11 @@ def add_anexo_iv_table(
             for cell in cells[1:2]:
                 set_cell_text(cell, "")
 
+            set_contents_cell_text(
+                cells[1],
+                contents_by_criterion[criterion_index],
+                suggested=suggested_contents
+            )
             set_strategy_placeholder_cell_text(cells[2])
             set_spaces_equipment_cell_text(cells[3], spaces, equipment_groups)
 
@@ -477,8 +935,10 @@ def add_anexo_iv_table(
         set_cell_shading(bottom_cells[3], WHITE_FILL)
 
         criteria = uf.get("criteria", []) or [{}]
+        contents_by_criterion = assign_contents_to_criteria(criteria, uf.get("contents", []))
+        suggested_contents = len(criteria) > 1
 
-        for criterion in criteria:
+        for criterion_index, criterion in enumerate(criteria):
             cells = table.add_row().cells
             for index, cell in enumerate(cells):
                 cell.width = widths[index]
@@ -487,6 +947,11 @@ def add_anexo_iv_table(
             for cell in cells[1:2]:
                 set_cell_text(cell, "")
 
+            set_contents_cell_text(
+                cells[1],
+                contents_by_criterion[criterion_index],
+                suggested=suggested_contents
+            )
             set_strategy_placeholder_cell_text(cells[2])
             set_spaces_equipment_cell_text(cells[3], spaces, equipment_groups)
 

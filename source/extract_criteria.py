@@ -192,7 +192,7 @@ def parse_criteria_line(
 ):
     text = line["text"]
 
-    if re.match(r"^C\d+:", text):
+    if re.match(r"^C\d+\b:?", text):
         criterion = {
             "text": text,
             "subcriteria": []
