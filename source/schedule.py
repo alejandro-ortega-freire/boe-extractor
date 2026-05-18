@@ -154,10 +154,16 @@ def prompt_start_date():
     return parsed
 
 
+def prompt_copy_subcriteria():
+    value = input("¿Copiar subcriterios en el Anexo IV? (y/n, defecto n): ").strip().lower()
+    return value in ("y", "yes")
+
+
 def prompt_schedule_config():
     return {
         "session_hours": prompt_session_hours(),
         "start_date": prompt_start_date(),
+        "copy_subcriteria": prompt_copy_subcriteria(),
     }
 
 

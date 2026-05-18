@@ -14,7 +14,9 @@ from source.fallbacks import fallback_spaces_from_text, fallback_equipment_from_
 from source.debug import dump_geometry_debug
 from source.normalization import normalize_document_payload
 from source.schedule import calculate_schedule, prompt_schedule_config
+from source.anexo_iv_writer import build_module_filename, create_anexo_iv_docx
 from source.word_writer import create_anexo_iii_docx, create_info_docx
+from source.word_writer import add_header_footer
 
 
 def safe_path_name(value, fallback):
@@ -122,3 +124,27 @@ if __name__ == "__main__":
 
             print(f"Generado: {info_output_path}")
             print(f"Generado: {anexo_output_path}")
+
+            for training_module in payload["training_modules"]:
+                module_code = safe_path_name(
+                    training_module.get("identifier", "").split(":", 1)[0],
+                    "MF"
+                )
+                anexo_iv_output_path = os.path.join(
+                    certificate_output_folder,
+                    build_module_filename(module_code, certificate_code)
+                )
+
+                create_anexo_iv_docx(
+                    payload["data"],
+                    training_module,
+                    payload["duration_text"],
+                    anexo_iv_output_path,
+                    schedule,
+                    add_header_footer,
+                    schedule_config["copy_subcriteria"],
+                    payload["spaces"],
+                    payload["equipment_groups"]
+                )
+
+                print(f"Generado: {anexo_iv_output_path}")

@@ -19,7 +19,7 @@ ANEXO_FONT_SIZE = 10
 HEADER_ROW_HEIGHT_CM = 1.7
 ANEXO_TABLE_WIDTH_PERCENT = 97
 HOURS_COLUMN_WIDTH = Cm(2.2)
-DATES_COLUMN_WIDTH = Cm(5.3)
+DATES_COLUMN_WIDTH = Cm(5.5)
 
 
 def is_practice_module(module):
@@ -49,7 +49,7 @@ def duration_for_anexo(duration_text):
     if match:
         mf_hours = int(match.group(1))
         mp_hours = int(match.group(2))
-        return f"{mf_hours} + {mp_hours} FEM = {mf_hours + mp_hours} HORAS"
+        return f"{mf_hours} + {mp_hours} FEM"
 
     match = re.match(r"^(\d+)h$", duration_text, flags=re.IGNORECASE)
 
