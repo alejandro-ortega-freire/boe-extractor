@@ -6,6 +6,7 @@ SMALL_CONTENT_SPLIT_PENALTY = 4.0
 MAX_CONTENT_PARTS = 2
 ASSIGNMENT_WINDOW = 1
 PARTITION_DIVERSITY_THRESHOLD = 2
+MAX_AUTOMATIC_CONTENT_PARTS = 2
 FUSION_CORE_BONUS = 3.0
 FUSION_SUPPORT_BONUS = 2.0
 FUSION_PHASE_BONUS = 1.0
@@ -90,6 +91,7 @@ TECHNICAL_EXPRESSIONS = {
 SEMANTIC_CORES = {
     "programacion": {"programacion", "didactica", "temporalizacion", "unidad", "cronograma"},
     "evaluacion": {"evaluacion", "prueba", "pruebas", "item", "items", "rubrica", "cotejo", "escala", "calificacion"},
+    "fundamentos": {"estructura", "estructuras", "normativa", "marco", "sistema", "certificado", "certificados", "fundamento", "fundamentos"},
     "tutoria": {"tutoria", "tutorial", "seguimiento", "alumno", "alumnos", "orientacion", "asesoramiento"},
     "material": {"material", "materiales", "grafico", "graficos", "multimedia", "impreso", "presentacion"},
     "virtual": {"virtual", "online", "linea", "foro", "foros", "chat", "videotutorial", "plataforma"},
@@ -210,6 +212,11 @@ def content_segment_text(content, bullet=None):
     return " ".join(part for part in parts if part)
 
 
+def content_number(content):
+    match = re.match(r"^\s*(\d+)", content.get("title", ""))
+    return int(match.group(1)) if match else None
+
+
 def criterion_text(criterion):
     parts = [criterion.get("text", "")]
 
@@ -303,6 +310,32 @@ def semantic_diversity(signatures):
         groups.add(tags)
 
     return len(groups)
+
+
+def first_criterion_accepts_intro_fusion(criteria, contents):
+    if len(criteria or []) < 2 or len(contents or []) < 2:
+        return False
+
+    first_criterion = criterion_signature(criteria[0])
+    first_content = content_signature(content_segment_text(contents[0]))
+    second_content = content_signature(content_segment_text(contents[1]))
+    intro_cores = {"fundamentos", "empleo"}
+    specific_cores = {
+        "calidad", "correo", "evaluacion", "material", "ofimatica",
+        "seguridad", "tutoria",
+    }
+
+    return (
+        "conceptual" in first_criterion["phases"]
+        and bool(first_criterion["cores"] & intro_cores)
+        and not bool(first_criterion["cores"] & specific_cores)
+        and bool(first_content["cores"] & intro_cores)
+        and bool(second_content["cores"] & intro_cores)
+    )
+
+
+def should_split_content(content, contents, criterion_count):
+    return False
 
 
 def content_is_partible(content):
@@ -539,12 +572,11 @@ def split_bullets_into_chunks(bullets, max_parts, allow_extra_parts=False):
 
 def split_content_segments(contents, criterion_count=1):
     segments = []
-    needs_extra_coverage = len(contents or []) < criterion_count
 
     for content_index, content in enumerate(contents or []):
         bullets = content.get("bullets", [])
 
-        if bullets and (needs_extra_coverage or content_is_partible(content)):
+        if bullets and should_split_content(content, contents, criterion_count):
             chunks = split_bullets_into_chunks(bullets, criterion_count)
             bullet_start = 0
 
@@ -566,16 +598,10 @@ def split_content_segments(contents, criterion_count=1):
                 "content_index": content_index,
                 "bullet_index": 0,
                 "content": content,
-                "bullets": [],
+                "bullets": content.get("bullets", []),
                 "is_split": False,
                 "text": content_segment_text(content),
             })
-
-    if len(segments) < criterion_count:
-        fallback_segments = split_content_segments_for_coverage(contents)
-
-        if len(fallback_segments) > len(segments):
-            return fallback_segments
 
     return segments
 
@@ -612,7 +638,7 @@ def split_content_segments_for_coverage(contents):
                 "content_index": content_index,
                 "bullet_index": 0,
                 "content": content,
-                "bullets": [],
+                "bullets": content.get("bullets", []),
                 "is_split": False,
                 "text": content_segment_text(content),
             })
@@ -625,17 +651,147 @@ def roman_suffix(index):
     return suffixes[index] if index < len(suffixes) else str(index + 1)
 
 
-def rebalance_empty_content_assignments(assigned_segments):
+def split_segment_for_empty_criterion(segment, empty_index, donor_index):
+    bullets = segment.get("bullets", [])
+
+    if len(bullets) <= 1:
+        return None
+
+    if empty_index < donor_index:
+        empty_bullets = bullets[:max(1, len(bullets) // 2)]
+        donor_bullets = bullets[len(empty_bullets):]
+        empty_bullet_index = segment["bullet_index"]
+        donor_bullet_index = segment["bullet_index"] + len(empty_bullets)
+    else:
+        donor_bullets = bullets[:max(1, len(bullets) // 2)]
+        empty_bullets = bullets[len(donor_bullets):]
+        donor_bullet_index = segment["bullet_index"]
+        empty_bullet_index = segment["bullet_index"] + len(donor_bullets)
+
+    if not donor_bullets or not empty_bullets:
+        return None
+
+    segment["bullets"] = donor_bullets
+    segment["bullet_index"] = donor_bullet_index
+    segment["is_split"] = True
+    segment["text"] = " ".join(
+        content_segment_text(segment["content"], bullet)
+        for bullet in donor_bullets
+    )
+    segment.pop("signature", None)
+
+    return {
+        **segment,
+        "bullets": empty_bullets,
+        "bullet_index": empty_bullet_index,
+        "is_split": True,
+        "text": " ".join(
+            content_segment_text(segment["content"], bullet)
+            for bullet in empty_bullets
+        ),
+    }
+
+
+def best_split_candidate(assigned_segments, criteria_signatures, empty_index):
+    best = None
+
+    for donor_index, criterion_segments in enumerate(assigned_segments):
+        if donor_index == empty_index:
+            continue
+
+        for segment_index, segment in enumerate(criterion_segments):
+            if len(segment.get("bullets", [])) <= 1:
+                continue
+
+            candidate_segment = split_segment_preview(segment, empty_index, donor_index)
+
+            if not candidate_segment:
+                continue
+
+            evaluation = content_match_evaluation(criteria_signatures[empty_index], candidate_segment["text"])
+            distance_penalty = abs(donor_index - empty_index) * 0.75
+            score = evaluation["score"] - distance_penalty
+            segment_number = content_number(segment.get("content", {}))
+
+            if segment_number and segment_number - 1 == empty_index:
+                score += 14.0
+
+            if segment_number and segment_number == len(assigned_segments) and empty_index >= segment_number - 2:
+                score += 8.0
+
+            if best is None or score > best["score"]:
+                best = {
+                    "score": score,
+                    "donor_index": donor_index,
+                    "segment_index": segment_index,
+                }
+
+    return best
+
+
+def split_segment_preview(segment, empty_index, donor_index):
+    bullets = segment.get("bullets", [])
+
+    if len(bullets) <= 1:
+        return None
+
+    if empty_index < donor_index:
+        empty_bullets = bullets[:max(1, len(bullets) // 2)]
+        empty_bullet_index = segment["bullet_index"]
+    else:
+        donor_bullets = bullets[:max(1, len(bullets) // 2)]
+        empty_bullets = bullets[len(donor_bullets):]
+        empty_bullet_index = segment["bullet_index"] + len(donor_bullets)
+
+    if not empty_bullets:
+        return None
+
+    return {
+        **segment,
+        "bullets": empty_bullets,
+        "bullet_index": empty_bullet_index,
+        "is_split": True,
+        "text": " ".join(
+            content_segment_text(segment["content"], bullet)
+            for bullet in empty_bullets
+        ),
+    }
+
+
+def rebalance_empty_content_assignments(assigned_segments, criteria_signatures=None):
     if not assigned_segments:
         return assigned_segments
 
-    empty_indexes = [
-        index
-        for index, segments in enumerate(assigned_segments)
-        if not segments
-    ]
+    while True:
+        empty_indexes = [
+            index
+            for index, segments in enumerate(assigned_segments)
+            if not segments
+        ]
 
-    for empty_index in empty_indexes:
+        if not empty_indexes:
+            break
+
+        empty_index = empty_indexes[0]
+        split_candidate = (
+            best_split_candidate(assigned_segments, criteria_signatures, empty_index)
+            if criteria_signatures
+            else None
+        )
+
+        if split_candidate:
+            donor_index = split_candidate["donor_index"]
+            segment_index = split_candidate["segment_index"]
+            new_segment = split_segment_for_empty_criterion(
+                assigned_segments[donor_index][segment_index],
+                empty_index,
+                donor_index,
+            )
+
+            if new_segment:
+                assigned_segments[empty_index].append(new_segment)
+                continue
+
         donors = [
             index
             for index, segments in enumerate(assigned_segments)
@@ -728,7 +884,7 @@ def summarize_assignments(assignments):
     }
 
 
-def assign_segments_to_criteria(criteria, segments):
+def assign_segments_to_criteria(criteria, segments, use_content_numbers=True):
     assigned_segments = [[] for _ in criteria]
 
     if not segments:
@@ -736,15 +892,27 @@ def assign_segments_to_criteria(criteria, segments):
 
     criteria_signatures = [criterion_signature(criterion) for criterion in criteria]
     min_criterion_index = 0
+    enough_segments_for_criteria = len(segments) >= len(criteria)
 
     for segment_index, segment in enumerate(segments):
-        expected = round(
-            segment_index * (len(criteria) - 1) / max(len(segments) - 1, 1)
-        )
+        segment_number = content_number(segment.get("content", {})) if use_content_numbers else None
+        if not enough_segments_for_criteria and segment_index == len(segments) - 1:
+            expected = len(criteria) - 1
+        elif segment_number:
+            expected = min(segment_number - 1, len(criteria) - 1)
+        else:
+            expected = round(
+                segment_index * (len(criteria) - 1) / max(len(segments) - 1, 1)
+            )
         best_index = min_criterion_index
         best_score = None
 
-        lower_bound = max(min_criterion_index, expected - ASSIGNMENT_WINDOW)
+        if enough_segments_for_criteria:
+            lower_bound = max(min_criterion_index, expected - ASSIGNMENT_WINDOW)
+        elif segment_number:
+            lower_bound = max(min_criterion_index, expected)
+        else:
+            lower_bound = max(min_criterion_index, expected - ASSIGNMENT_WINDOW)
         upper_bound = min(len(criteria) - 1, expected + ASSIGNMENT_WINDOW)
 
         if lower_bound > upper_bound:
@@ -760,6 +928,17 @@ def assign_segments_to_criteria(criteria, segments):
                 criterion_index,
             )
             score = evaluation["score"]
+            if criterion_index == expected:
+                score += 18.0
+            if (
+                criterion_index == len(criteria) - 1
+                and segment_index < len(segments) - 1
+            ):
+                current_signature = segment_signature(segment)
+                next_signature = segment_signature(segments[segment_index + 1])
+
+                if "online" not in current_signature["supports"] and "online" in next_signature["supports"]:
+                    score -= 25.0
 
             if best_score is None or score > best_score:
                 best_score = score
@@ -778,7 +957,7 @@ def assign_segments_to_criteria(criteria, segments):
         min_criterion_index = best_index
 
     assigned_segments = ensure_all_segments_assigned(assigned_segments, segments)
-    assigned_segments = rebalance_empty_content_assignments(assigned_segments)
+    assigned_segments = rebalance_empty_content_assignments(assigned_segments, criteria_signatures)
     assigned_segments = ensure_all_segments_assigned(assigned_segments, segments)
     assigned_segments = refresh_final_assignment_metadata(assigned_segments)
 
@@ -859,6 +1038,18 @@ def assign_contents_to_criteria(criteria, contents):
 
     if len(criteria) == 1:
         return [contents or []]
+
+    if first_criterion_accepts_intro_fusion(criteria, contents):
+        remaining_segments = split_content_segments(contents[2:], len(criteria) - 1)
+        remaining_assigned = assign_segments_to_criteria(
+            criteria[1:],
+            remaining_segments,
+            use_content_numbers=False,
+        )
+        return [
+            [contents[0], contents[1]],
+            *render_assignments(contents[2:], remaining_assigned),
+        ]
 
     segments = split_content_segments(contents, len(criteria))
     assigned_segments = assign_segments_to_criteria(criteria, segments)
