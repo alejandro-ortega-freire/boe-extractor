@@ -9,6 +9,8 @@ PARTITION_DIVERSITY_THRESHOLD = 2
 FUSION_CORE_BONUS = 3.0
 FUSION_SUPPORT_BONUS = 2.0
 FUSION_PHASE_BONUS = 1.0
+HIGH_CONFIDENCE_THRESHOLD = 14.0
+MEDIUM_CONFIDENCE_THRESHOLD = 6.0
 
 STOPWORDS = {
     "a", "al", "ante", "asi", "cada", "como", "con", "contra", "de", "del",
@@ -330,26 +332,78 @@ def overlap_score(left, right, weight):
     return len(left & right) * weight
 
 
-def content_similarity(criteria_signature, text):
+def confidence_from_score(score, reasons):
+    if score >= HIGH_CONFIDENCE_THRESHOLD and any(
+        reason.startswith("core:")
+        or reason.startswith("technical:")
+        for reason in reasons
+    ):
+        return "high"
+
+    if score >= MEDIUM_CONFIDENCE_THRESHOLD:
+        return "medium"
+
+    return "low"
+
+
+def shared_weighted_terms(criteria_weights, content_weights, minimum_weight=2.0):
+    terms = []
+
+    for token, content_weight in content_weights.items():
+        if token not in criteria_weights:
+            continue
+
+        shared_weight = min(content_weight, criteria_weights[token])
+
+        if shared_weight >= minimum_weight:
+            terms.append((token, shared_weight))
+
+    return sorted(terms, key=lambda item: (-item[1], item[0]))
+
+
+def content_match_evaluation(criteria_signature, text):
     content_sig = content_signature(text)
     criteria_weights = criteria_signature["weights"]
     content_weights = content_sig["weights"]
 
     if not criteria_weights or not content_weights:
-        return 0.0
+        return {
+            "score": 0.0,
+            "confidence": "low",
+            "reasons": ["no-comparable-keywords"],
+            "content_signature": content_sig,
+        }
 
-    positive_score = sum(
+    keyword_score = sum(
         min(weight, criteria_weights.get(token, 0))
         for token, weight in content_weights.items()
     )
-    positive_score += overlap_score(criteria_signature["cores"], content_sig["cores"], 8.0)
-    positive_score += overlap_score(criteria_signature["phases"], content_sig["phases"], 4.0)
-    positive_score += overlap_score(criteria_signature["supports"], content_sig["supports"], 3.0)
+    core_overlap = criteria_signature["cores"] & content_sig["cores"]
+    phase_overlap = criteria_signature["phases"] & content_sig["phases"]
+    support_overlap = criteria_signature["supports"] & content_sig["supports"]
+    core_score = overlap_score(criteria_signature["cores"], content_sig["cores"], 8.0)
+    phase_score = overlap_score(criteria_signature["phases"], content_sig["phases"], 4.0)
+    support_score = overlap_score(criteria_signature["supports"], content_sig["supports"], 3.0)
+    positive_score = keyword_score + core_score + phase_score + support_score
     generic_overlap = criteria_signature["tokens"] & content_sig["tokens"] & GENERIC_PEDAGOGICAL_TERMS
 
     criteria_tokens = set(criteria_weights)
     content_tokens = set(content_weights)
     negative_penalty = 0.0
+    reasons = []
+
+    if core_overlap:
+        reasons.extend(f"core:{item}" for item in sorted(core_overlap))
+
+    if phase_overlap:
+        reasons.extend(f"phase:{item}" for item in sorted(phase_overlap))
+
+    if support_overlap:
+        reasons.extend(f"support:{item}" for item in sorted(support_overlap))
+
+    for term, _weight in shared_weighted_terms(criteria_weights, content_weights):
+        reason_prefix = "technical" if term in TECHNICAL_EXPRESSIONS else "term"
+        reasons.append(f"{reason_prefix}:{term}")
 
     for group in NEGATIVE_KEYWORD_GROUPS:
         if criteria_tokens & group:
@@ -357,6 +411,7 @@ def content_similarity(criteria_signature, text):
 
         if content_tokens & group:
             negative_penalty += 1.5
+            reasons.append("penalty:foreign-domain")
 
     if (
         generic_overlap
@@ -365,8 +420,28 @@ def content_similarity(criteria_signature, text):
         and not (criteria_signature["supports"] & content_sig["supports"])
     ):
         negative_penalty += len(generic_overlap) * 1.25
+        reasons.append("penalty:generic-only")
 
-    return positive_score - negative_penalty
+    final_score = positive_score - negative_penalty
+    confidence = confidence_from_score(final_score, reasons)
+
+    return {
+        "score": final_score,
+        "confidence": confidence,
+        "reasons": reasons or ["order-fallback"],
+        "content_signature": content_sig,
+        "components": {
+            "keyword": keyword_score,
+            "core": core_score,
+            "phase": phase_score,
+            "support": support_score,
+            "penalty": negative_penalty,
+        },
+    }
+
+
+def content_similarity(criteria_signature, text):
+    return content_match_evaluation(criteria_signature, text)["score"]
 
 
 def segment_signature(segment):
@@ -391,7 +466,39 @@ def consecutive_fusion_bonus(candidate_segments, segment):
     return bonus
 
 
-def clone_content_with_bullets(content, bullets, suffix=""):
+def score_segment_for_criterion(criteria_signature, assigned_segments, segment, expected, criterion_index):
+    evaluation = content_match_evaluation(criteria_signature, segment["text"])
+    fusion_bonus = consecutive_fusion_bonus(assigned_segments, segment)
+    order_penalty = abs(criterion_index - expected) * 1.25
+    split_penalty = SMALL_CONTENT_SPLIT_PENALTY if segment.get("is_split") else 0
+    score = evaluation["score"] + fusion_bonus - order_penalty - split_penalty
+
+    reasons = list(evaluation["reasons"])
+
+    if fusion_bonus:
+        reasons.append("bonus:consecutive-fusion")
+
+    if order_penalty:
+        reasons.append("penalty:order-distance")
+
+    if split_penalty:
+        reasons.append("penalty:split-segment")
+
+    return {
+        "score": score,
+        "base_score": evaluation["score"],
+        "confidence": confidence_from_score(score, reasons),
+        "reasons": reasons,
+        "components": {
+            **evaluation.get("components", {}),
+            "fusion_bonus": fusion_bonus,
+            "order_penalty": order_penalty,
+            "split_penalty": split_penalty,
+        },
+    }
+
+
+def clone_content_with_bullets(content, bullets, suffix="", assignment=None):
     title = content.get("title", "")
 
     if suffix and title:
@@ -400,6 +507,7 @@ def clone_content_with_bullets(content, bullets, suffix=""):
     return {
         "title": title,
         "bullets": bullets,
+        "assignment": assignment or {},
     }
 
 
@@ -577,6 +685,49 @@ def ensure_all_segments_assigned(assigned_segments, segments):
     return assigned_segments
 
 
+def refresh_final_assignment_metadata(assigned_segments):
+    for criterion_index, criterion_segments in enumerate(assigned_segments):
+        for segment in criterion_segments:
+            assignment = segment.setdefault("assignment", {})
+
+            if assignment.get("criterion_index") != criterion_index:
+                reasons = list(assignment.get("reasons", []))
+                reasons.append("fallback:coverage-rebalance")
+                assignment["reasons"] = reasons
+                assignment["confidence"] = "low"
+
+            assignment["criterion_index"] = criterion_index
+
+    return assigned_segments
+
+
+def summarize_assignments(assignments):
+    if not assignments:
+        return {}
+
+    confidence_rank = {"low": 0, "medium": 1, "high": 2}
+    weakest_confidence = min(
+        (assignment.get("confidence", "low") for assignment in assignments),
+        key=lambda value: confidence_rank.get(value, 0),
+    )
+    reasons = []
+
+    for assignment in assignments:
+        for reason in assignment.get("reasons", []):
+            if reason not in reasons:
+                reasons.append(reason)
+
+    return {
+        "confidence": weakest_confidence,
+        "score": round(
+            sum(assignment.get("score", 0.0) for assignment in assignments) / len(assignments),
+            3,
+        ),
+        "reasons": reasons,
+        "segments": assignments,
+    }
+
+
 def assign_segments_to_criteria(criteria, segments):
     assigned_segments = [[] for _ in criteria]
 
@@ -601,22 +752,35 @@ def assign_segments_to_criteria(criteria, segments):
             upper_bound = min(len(criteria) - 1, min_criterion_index + ASSIGNMENT_WINDOW)
 
         for criterion_index in range(lower_bound, upper_bound + 1):
-            similarity = content_similarity(criteria_signatures[criterion_index], segment["text"])
-            fusion_bonus = consecutive_fusion_bonus(assigned_segments[criterion_index], segment)
-            order_penalty = abs(criterion_index - expected) * 1.25
-            split_penalty = SMALL_CONTENT_SPLIT_PENALTY if segment.get("is_split") else 0
-            score = similarity + fusion_bonus - order_penalty - split_penalty
+            evaluation = score_segment_for_criterion(
+                criteria_signatures[criterion_index],
+                assigned_segments[criterion_index],
+                segment,
+                expected,
+                criterion_index,
+            )
+            score = evaluation["score"]
 
             if best_score is None or score > best_score:
                 best_score = score
                 best_index = criterion_index
+                best_evaluation = evaluation
 
+        segment["assignment"] = {
+            "criterion_index": best_index,
+            "score": round(best_evaluation["score"], 3),
+            "base_score": round(best_evaluation["base_score"], 3),
+            "confidence": best_evaluation["confidence"],
+            "reasons": best_evaluation["reasons"],
+            "components": best_evaluation["components"],
+        }
         assigned_segments[best_index].append(segment)
         min_criterion_index = best_index
 
     assigned_segments = ensure_all_segments_assigned(assigned_segments, segments)
     assigned_segments = rebalance_empty_content_assignments(assigned_segments)
     assigned_segments = ensure_all_segments_assigned(assigned_segments, segments)
+    assigned_segments = refresh_final_assignment_metadata(assigned_segments)
 
     return assigned_segments
 
@@ -645,10 +809,18 @@ def build_contents_from_segments(contents, segments, part_positions=None, criter
             suffix = roman_suffix(part_positions[content_index].index(criterion_index))
 
         bullets = []
+        assignments = []
         for segment in grouped:
             bullets.extend(segment["bullets"])
+            if segment.get("assignment"):
+                assignments.append(segment["assignment"])
 
-        result.append(clone_content_with_bullets(content, bullets, suffix))
+        result.append(clone_content_with_bullets(
+            content,
+            bullets,
+            suffix,
+            summarize_assignments(assignments),
+        ))
 
     return result
 
