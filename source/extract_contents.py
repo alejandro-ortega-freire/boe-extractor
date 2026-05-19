@@ -74,6 +74,10 @@ def new_bullet(text):
     }
 
 
+def get_content_heading_match(text):
+    return re.match(r"^(\d+)\s*(?:\.\s*|\s+)([A-ZÁÉÍÓÚÜÑ].*)", text)
+
+
 def get_bullet_match(text):
     return re.match(r"^([-–—○□▫▪◦‣∙\uf0a7])\s*(.*)", text)
 
@@ -198,7 +202,9 @@ def parse_content_line(line, target, state):
     if not text:
         return state
 
-    if re.match(r"^\d+\.\s+", text):
+    heading_match = get_content_heading_match(text)
+    if heading_match:
+        text = f"{heading_match.group(1)}. {heading_match.group(2)}"
         content = new_content_item(text)
         target.append(content)
 
