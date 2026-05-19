@@ -5,6 +5,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
+import re
 
 from source.anexo_iii_writer import (
     ACTION_CODE,
@@ -356,7 +357,12 @@ def scheduled_text(schedule, code):
 
 def module_title(module):
     identifier = module.get("identifier", "")
-    return identifier.replace(":", "", 1).strip()
+    return module_identifier_without_hours(module).replace(":", "", 1).strip()
+
+
+def module_identifier_without_hours(module):
+    identifier = module.get("identifier", "")
+    return re.sub(r"\s*\(\d+\s*horas?\)\s*\.?\s*$", "", identifier, flags=re.IGNORECASE).strip()
 
 
 def module_schedule_text(schedule, module):
@@ -422,7 +428,7 @@ def add_module_header(doc, data, module, duration_text, schedule):
 
     module_dates = module_schedule_text(schedule, module)
 
-    add_tabbed_line(doc, [("IDENTIFICACIÓN DEL MÓDULO PROFESIONAL: ", module.get("identifier", ""))])
+    add_tabbed_line(doc, [("IDENTIFICACIÓN DEL MÓDULO PROFESIONAL: ", module_identifier_without_hours(module))])
     add_tabbed_line(
         doc,
         [
