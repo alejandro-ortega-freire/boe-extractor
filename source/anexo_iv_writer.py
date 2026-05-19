@@ -29,8 +29,8 @@ LIGHT_BORDER = "BFBFBF"
 UF_ROW_MIN_HEIGHT = Cm(1.4)
 MAIN_HEADER_ROW_HEIGHT = Cm(2.6)
 SUGGESTION_COLOR = RGBColor(192, 0, 0)
-MIN_BULLETS_TO_SPLIT = 7
-MIN_SPLIT_PART_SIZE = 6
+SMALL_CONTENT_SPLIT_PENALTY = 4.0
+MAX_CONTENT_PARTS = 2
 ASSIGNMENT_WINDOW = 1
 STOPWORDS = {
     "a", "al", "ante", "asi", "cada", "como", "con", "contra", "de", "del",
@@ -444,13 +444,14 @@ def clone_content_with_bullets(content, bullets, suffix=""):
     }
 
 
-def split_bullets_into_chunks(bullets, max_parts):
+def split_bullets_into_chunks(bullets, max_parts, allow_extra_parts=False):
     total = len(bullets)
 
-    if total < MIN_BULLETS_TO_SPLIT:
+    if total <= 1:
         return [bullets]
 
-    parts = min(max_parts, total // MIN_SPLIT_PART_SIZE)
+    part_limit = total if allow_extra_parts else MAX_CONTENT_PARTS
+    parts = min(max_parts, part_limit, total)
 
     if parts < 2:
         return [bullets]
@@ -465,9 +466,6 @@ def split_bullets_into_chunks(bullets, max_parts):
         end = start + size
         chunks.append(bullets[start:end])
         start = end
-
-    if any(len(chunk) < MIN_SPLIT_PART_SIZE for chunk in chunks):
-        return [bullets]
 
     return chunks
 
@@ -488,6 +486,7 @@ def split_content_segments(contents, criterion_count=1):
                     "bullet_index": bullet_start,
                     "content": content,
                     "bullets": chunk,
+                    "is_split": len(chunks) > 1,
                     "text": " ".join(
                         content_segment_text(content, bullet)
                         for bullet in chunk
@@ -500,6 +499,53 @@ def split_content_segments(contents, criterion_count=1):
                 "bullet_index": 0,
                 "content": content,
                 "bullets": [],
+                "is_split": False,
+                "text": content_segment_text(content),
+            })
+
+    if len(segments) < criterion_count:
+        fallback_segments = split_content_segments_for_coverage(contents)
+
+        if len(fallback_segments) > len(segments):
+            return fallback_segments
+
+    return segments
+
+
+def split_content_segments_for_coverage(contents):
+    segments = []
+
+    for content_index, content in enumerate(contents or []):
+        bullets = content.get("bullets", [])
+
+        if bullets:
+            chunks = split_bullets_into_chunks(
+                bullets,
+                max(len(bullets), 1),
+                allow_extra_parts=True
+            )
+            bullet_start = 0
+
+            for chunk in chunks:
+                segments.append({
+                    "content_index": content_index,
+                    "bullet_index": bullet_start,
+                    "content": content,
+                    "bullets": chunk,
+                    "is_split": len(chunks) > 1,
+                    "text": " ".join(
+                        content_segment_text(content, bullet)
+                        for bullet in chunk
+                    ),
+                })
+                bullet_start += len(chunk)
+        else:
+            segments.append({
+                "content_index": content_index,
+                "bullet_index": 0,
+                "content": content,
+                "bullets": [],
+                "is_split": False,
                 "text": content_segment_text(content),
             })
 
@@ -606,7 +652,8 @@ def assign_contents_to_criteria(criteria, contents):
         for criterion_index in range(lower_bound, upper_bound + 1):
             similarity = content_similarity(criteria_weights[criterion_index], segment["text"])
             order_penalty = abs(criterion_index - expected) * 1.25
-            score = similarity - order_penalty
+            split_penalty = SMALL_CONTENT_SPLIT_PENALTY if segment.get("is_split") else 0
+            score = similarity - order_penalty - split_penalty
 
             if best_score is None or score > best_score:
                 best_score = score
