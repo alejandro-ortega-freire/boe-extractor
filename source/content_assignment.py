@@ -5,6 +5,10 @@ import unicodedata
 SMALL_CONTENT_SPLIT_PENALTY = 4.0
 MAX_CONTENT_PARTS = 2
 ASSIGNMENT_WINDOW = 1
+PARTITION_DIVERSITY_THRESHOLD = 2
+FUSION_CORE_BONUS = 3.0
+FUSION_SUPPORT_BONUS = 2.0
+FUSION_PHASE_BONUS = 1.0
 
 STOPWORDS = {
     "a", "al", "ante", "asi", "cada", "como", "con", "contra", "de", "del",
@@ -16,6 +20,13 @@ STOPWORDS = {
     "criterios", "datos", "diferentes", "documento", "documentos", "forma",
     "funcion", "funciones", "informacion", "mediante", "necesario",
     "procedimiento", "procedimientos", "proceso", "procesos", "relacion",
+}
+
+GENERIC_PEDAGOGICAL_TERMS = {
+    "actividad", "actividades", "aprendizaje", "didactico", "didactica",
+    "ensenanza", "formacion", "formativo", "formativa", "metodologia",
+    "metodologico", "metodologica", "objetivo", "objetivos", "recurso",
+    "recursos", "resultado", "resultados",
 }
 
 DOMAIN_SYNONYMS = {
@@ -128,6 +139,12 @@ NEGATIVE_KEYWORD_GROUPS = [
     {"urgencia", "urgencias", "emergencia", "emergencias"},
 ]
 
+PRACTICAL_CASE_MARKERS = (
+    "en un supuesto practico",
+    "ante un supuesto practico",
+    "a partir de un supuesto practico",
+)
+
 
 def strip_accents(text):
     normalized = unicodedata.normalize("NFD", str(text or "").lower())
@@ -154,7 +171,8 @@ def weighted_keywords(text):
     weights = {}
 
     for token in tokens:
-        weights[token] = weights.get(token, 0) + 1.0
+        token_weight = 0.25 if token in GENERIC_PEDAGOGICAL_TERMS else 1.0
+        weights[token] = weights.get(token, 0) + token_weight
 
     normalized_text = " ".join(tokens)
 
@@ -200,6 +218,29 @@ def criterion_text(criterion):
     return " ".join(part for part in parts if part)
 
 
+def is_practical_case_text(text):
+    normalized = strip_accents(text)
+    return any(marker in normalized for marker in PRACTICAL_CASE_MARKERS)
+
+
+def remove_practical_case_boilerplate(text):
+    normalized = strip_accents(text)
+
+    for marker in PRACTICAL_CASE_MARKERS:
+        marker_index = normalized.find(marker)
+
+        if marker_index >= 0:
+            after_marker = text[marker_index + len(marker):]
+            return after_marker.lstrip(" ,.:;")
+
+    return text
+
+
+def merge_weights(target, source, multiplier=1.0):
+    for token, weight in source.items():
+        target[token] = target.get(token, 0) + (weight * multiplier)
+
+
 def detect_tags(tokens, taxonomy):
     token_set = set(tokens)
     return {
@@ -221,11 +262,68 @@ def semantic_signature(text):
 
 
 def criterion_signature(criterion):
-    return semantic_signature(criterion_text(criterion))
+    base_signature = semantic_signature(criterion.get("text", ""))
+    weighted = dict(base_signature["weights"])
+    all_text_parts = [criterion.get("text", "")]
+
+    for subcriterion in criterion.get("subcriteria", []):
+        subcriterion_text = subcriterion.get("text", "")
+        subcriterion_parts = [subcriterion_text]
+        subcriterion_parts.extend(subcriterion.get("bullets", []))
+        subcriterion_joined = " ".join(part for part in subcriterion_parts if part)
+
+        if is_practical_case_text(subcriterion_text):
+            cleaned = remove_practical_case_boilerplate(subcriterion_joined)
+            merge_weights(weighted, weighted_keywords(cleaned), 0.45)
+            all_text_parts.append(cleaned)
+        else:
+            merge_weights(weighted, weighted_keywords(subcriterion_joined), 1.0)
+            all_text_parts.append(subcriterion_joined)
+
+    full_signature = semantic_signature(" ".join(part for part in all_text_parts if part))
+    full_signature["weights"] = weighted
+    return full_signature
 
 
 def content_signature(text):
     return semantic_signature(text)
+
+
+def semantic_diversity(signatures):
+    groups = set()
+
+    for signature in signatures:
+        tags = (
+            tuple(sorted(signature["cores"])),
+            tuple(sorted(signature["phases"])),
+            tuple(sorted(signature["supports"])),
+        )
+        groups.add(tags)
+
+    return len(groups)
+
+
+def content_is_partible(content):
+    bullets = content.get("bullets", [])
+
+    if len(bullets) < 2:
+        return False
+
+    signatures = [
+        content_signature(content_segment_text(content, bullet))
+        for bullet in bullets
+    ]
+    diverse_groups = semantic_diversity(signatures)
+    tagged_groups = sum(
+        1
+        for signature in signatures
+        if signature["cores"] or signature["phases"] or signature["supports"]
+    )
+
+    return (
+        diverse_groups >= PARTITION_DIVERSITY_THRESHOLD
+        and tagged_groups >= PARTITION_DIVERSITY_THRESHOLD
+    )
 
 
 def overlap_score(left, right, weight):
@@ -247,6 +345,7 @@ def content_similarity(criteria_signature, text):
     positive_score += overlap_score(criteria_signature["cores"], content_sig["cores"], 8.0)
     positive_score += overlap_score(criteria_signature["phases"], content_sig["phases"], 4.0)
     positive_score += overlap_score(criteria_signature["supports"], content_sig["supports"], 3.0)
+    generic_overlap = criteria_signature["tokens"] & content_sig["tokens"] & GENERIC_PEDAGOGICAL_TERMS
 
     criteria_tokens = set(criteria_weights)
     content_tokens = set(content_weights)
@@ -259,7 +358,37 @@ def content_similarity(criteria_signature, text):
         if content_tokens & group:
             negative_penalty += 1.5
 
+    if (
+        generic_overlap
+        and not (criteria_signature["cores"] & content_sig["cores"])
+        and not (criteria_signature["phases"] & content_sig["phases"])
+        and not (criteria_signature["supports"] & content_sig["supports"])
+    ):
+        negative_penalty += len(generic_overlap) * 1.25
+
     return positive_score - negative_penalty
+
+
+def segment_signature(segment):
+    if "signature" not in segment:
+        segment["signature"] = content_signature(segment["text"])
+
+    return segment["signature"]
+
+
+def consecutive_fusion_bonus(candidate_segments, segment):
+    if not candidate_segments:
+        return 0.0
+
+    previous_signature = segment_signature(candidate_segments[-1])
+    current_signature = segment_signature(segment)
+    bonus = 0.0
+
+    bonus += overlap_score(previous_signature["cores"], current_signature["cores"], FUSION_CORE_BONUS)
+    bonus += overlap_score(previous_signature["supports"], current_signature["supports"], FUSION_SUPPORT_BONUS)
+    bonus += overlap_score(previous_signature["phases"], current_signature["phases"], FUSION_PHASE_BONUS)
+
+    return bonus
 
 
 def clone_content_with_bullets(content, bullets, suffix=""):
@@ -302,11 +431,12 @@ def split_bullets_into_chunks(bullets, max_parts, allow_extra_parts=False):
 
 def split_content_segments(contents, criterion_count=1):
     segments = []
+    needs_extra_coverage = len(contents or []) < criterion_count
 
     for content_index, content in enumerate(contents or []):
         bullets = content.get("bullets", [])
 
-        if bullets:
+        if bullets and (needs_extra_coverage or content_is_partible(content)):
             chunks = split_bullets_into_chunks(bullets, criterion_count)
             bullet_start = 0
 
@@ -472,9 +602,10 @@ def assign_segments_to_criteria(criteria, segments):
 
         for criterion_index in range(lower_bound, upper_bound + 1):
             similarity = content_similarity(criteria_signatures[criterion_index], segment["text"])
+            fusion_bonus = consecutive_fusion_bonus(assigned_segments[criterion_index], segment)
             order_penalty = abs(criterion_index - expected) * 1.25
             split_penalty = SMALL_CONTENT_SPLIT_PENALTY if segment.get("is_split") else 0
-            score = similarity - order_penalty - split_penalty
+            score = similarity + fusion_bonus - order_penalty - split_penalty
 
             if best_score is None or score > best_score:
                 best_score = score
