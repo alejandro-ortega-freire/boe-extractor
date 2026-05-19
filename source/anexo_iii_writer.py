@@ -40,7 +40,7 @@ def hours_from_text(text):
 
 
 def title_without_hours(text):
-    return re.sub(r"\s*\(\d+\s*horas?\)\s*$", "", text, flags=re.IGNORECASE).strip()
+    return re.sub(r"\s*\(\d+\s*horas?\)\s*\.?\s*$", "", text, flags=re.IGNORECASE).strip()
 
 
 def duration_for_anexo(duration_text):
