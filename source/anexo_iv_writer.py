@@ -15,11 +15,11 @@ from source.anexo_iii_writer import (
     PROVINCE,
     duration_for_anexo,
     schedule_date_range,
-    set_table_width_percent,
 )
 from source.content_assignment import assign_contents_to_criteria
 from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
+from source.table_styles import set_cell_shading, set_table_width_percent
 
 
 ANEXO_IV_FONT_SIZE = 10
@@ -39,13 +39,6 @@ def configure_page(section):
     section.bottom_margin = Inches(0.65)
     section.left_margin = Inches(0.75)
     section.right_margin = Inches(0.75)
-
-
-def set_cell_shading(cell, fill):
-    tc_pr = cell._tc.get_or_add_tcPr()
-    shading = OxmlElement("w:shd")
-    shading.set(qn("w:fill"), fill)
-    tc_pr.append(shading)
 
 
 def set_cell_vertical_borders(cell, color=LIGHT_BORDER):
