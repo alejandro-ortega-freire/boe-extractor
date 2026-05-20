@@ -1,29 +1,39 @@
 import re
 
 from docx.enum.section import WD_ORIENT, WD_SECTION
-from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
+from source.docx_styles import (
+    ANEXO_FONT_SIZE,
+    ANEXO_III_DATES_COLUMN_WIDTH_CM,
+    ANEXO_III_HEADER_FILL,
+    ANEXO_III_HEADER_ROW_HEIGHT_CM,
+    ANEXO_III_HOURS_COLUMN_WIDTH_CM,
+    ANEXO_III_TABLE_WIDTH_PERCENT,
+)
 from source.schedule import code_from_text, format_date_range, format_holiday_note
+from source.settings import (
+    ACTION_CODE,
+    PLACEHOLDER_ADDRESS,
+    PLACEHOLDER_CENTER,
+    PLACEHOLDER_DATES,
+    PLACEHOLDER_LOCALITY,
+    PROVINCE,
+)
+from source.table_styles import (
+    set_cell_shading,
+    set_cell_text as set_table_cell_text,
+    set_table_width_percent,
+)
 
 
-PLACEHOLDER_DATES = "FECHAS PENDIENTES"
-PLACEHOLDER_CENTER = "Alejandro2000"
-PLACEHOLDER_ADDRESS = "C/ Falsa 123, 38320 Santa Cruz de Tenerife"
-PLACEHOLDER_LOCALITY = "Reino de la Piruleta"
-PROVINCE = "Santa Cruz de Tenerife"
-ACTION_CODE = "24-38/001234"
-ANEXO_FONT_SIZE = 10
-HEADER_ROW_HEIGHT_CM = 1.7
-ANEXO_TABLE_WIDTH_PERCENT = 97
-HOURS_COLUMN_WIDTH = Cm(2.2)
-DATES_COLUMN_WIDTH = Cm(5.5)
+HOURS_COLUMN_WIDTH = Cm(ANEXO_III_HOURS_COLUMN_WIDTH_CM)
+DATES_COLUMN_WIDTH = Cm(ANEXO_III_DATES_COLUMN_WIDTH_CM)
 
 
 def is_practice_module(module):
-    return code_from_text(module.get("text", "")).startswith("MP")
+    return code_from_text(module.text).startswith("MP")
 
 
 def certificate_modules(modules):
@@ -59,69 +69,19 @@ def duration_for_anexo(duration_text):
     return duration_text.upper()
 
 
-def set_cell_shading(cell, fill):
-    tc_pr = cell._tc.get_or_add_tcPr()
-    shading = OxmlElement("w:shd")
-    shading.set(qn("w:fill"), fill)
-    tc_pr.append(shading)
-
-
-def set_table_width_percent(table, percent):
-    table_pr = table._tbl.tblPr
-    tbl_w = table_pr.find(qn("w:tblW"))
-
-    if tbl_w is None:
-        tbl_w = OxmlElement("w:tblW")
-        table_pr.append(tbl_w)
-
-    tbl_w.set(qn("w:w"), str(percent * 50))
-    tbl_w.set(qn("w:type"), "pct")
-
-
-def set_cell_margins(cell, top=140, bottom=140):
-    tc_pr = cell._tc.get_or_add_tcPr()
-    tc_mar = tc_pr.first_child_found_in("w:tcMar")
-
-    if tc_mar is None:
-        tc_mar = OxmlElement("w:tcMar")
-        tc_pr.append(tc_mar)
-
-    for margin_name, value in (("top", top), ("bottom", bottom)):
-        margin = tc_mar.find(qn(f"w:{margin_name}"))
-
-        if margin is None:
-            margin = OxmlElement(f"w:{margin_name}")
-            tc_mar.append(margin)
-
-        margin.set(qn("w:w"), str(value))
-        margin.set(qn("w:type"), "dxa")
-
-
-def set_cell_text(
-    cell,
-    text,
-    bold=False,
-    size=ANEXO_FONT_SIZE,
-    align=WD_ALIGN_PARAGRAPH.LEFT,
-    vertical_padding=True
-):
-    cell.text = ""
-
-    if vertical_padding:
-        set_cell_margins(cell)
-
-    paragraph = cell.paragraphs[0]
-    paragraph.alignment = align
-    paragraph.paragraph_format.space_before = Pt(0)
-    paragraph.paragraph_format.space_after = Pt(0)
-    run = paragraph.add_run(str(text or ""))
-    run.bold = bold
-    run.font.size = Pt(size)
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+def set_cell_text(cell, text, bold=False, size=ANEXO_FONT_SIZE, align=WD_ALIGN_PARAGRAPH.LEFT, vertical_padding=True):
+    set_table_cell_text(
+        cell,
+        text,
+        bold=bold,
+        size=size,
+        align=align,
+        vertical_padding=vertical_padding,
+    )
 
 
 def set_header_cell(cell, text):
-    set_cell_shading(cell, "4F81BD")
+    set_cell_shading(cell, ANEXO_III_HEADER_FILL)
     set_cell_text(cell, text, bold=True, align=WD_ALIGN_PARAGRAPH.CENTER, vertical_padding=False)
 
     for paragraph in cell.paragraphs:
@@ -185,8 +145,8 @@ def add_anexo_header(doc, data, duration_text, schedule=None):
     doc.add_paragraph("")
 
     certificate = (
-        f"{ACTION_CODE} {data.get('codigo', '')} "
-        f"{data.get('nombre', '').upper()}"
+        f"{ACTION_CODE} {data.codigo} "
+        f"{data.nombre.upper()}"
     ).strip()
 
     add_tabbed_label_line(doc, [
@@ -215,9 +175,9 @@ def scheduled_text(schedule, text):
 
 
 def module_rows(module, schedule=None):
-    module_text = title_without_hours(module.get("text", ""))
-    module_hours = hours_from_text(module.get("text", ""))
-    ufs = module.get("ufs", [])
+    module_text = title_without_hours(module.text)
+    module_hours = hours_from_text(module.text)
+    ufs = module.ufs
 
     if not ufs:
         return [{
@@ -225,7 +185,7 @@ def module_rows(module, schedule=None):
             "module_hours": module_hours,
             "uf": "",
             "uf_hours": "",
-            "dates": scheduled_text(schedule, module.get("text", "")),
+            "dates": scheduled_text(schedule, module.text),
         }]
 
     rows = []
@@ -257,7 +217,7 @@ def add_planning_table(doc, modules, schedule=None):
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     table.autofit = False
-    set_table_width_percent(table, ANEXO_TABLE_WIDTH_PERCENT)
+    set_table_width_percent(table, ANEXO_III_TABLE_WIDTH_PERCENT)
 
     headers = [
         "MÓDULOS DEL CERTIFICADO",
@@ -274,7 +234,7 @@ def add_planning_table(doc, modules, schedule=None):
         set_header_cell(cell, header)
         cell.width = widths[index]
 
-    table.rows[0].height = Cm(HEADER_ROW_HEIGHT_CM)
+    table.rows[0].height = Cm(ANEXO_III_HEADER_ROW_HEIGHT_CM)
 
     for module in certificate_modules(modules):
         rows = module_rows(module, schedule)
@@ -322,7 +282,7 @@ def add_practice_table(doc, modules, schedule=None):
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     table.autofit = False
-    set_table_width_percent(table, ANEXO_TABLE_WIDTH_PERCENT)
+    set_table_width_percent(table, ANEXO_III_TABLE_WIDTH_PERCENT)
 
     widths = [Inches(4.6), HOURS_COLUMN_WIDTH, Inches(5.0)]
     headers = [
@@ -341,14 +301,14 @@ def add_practice_table(doc, modules, schedule=None):
                 for run in paragraph.runs:
                     run.italic = True
 
-    table.rows[0].height = Cm(HEADER_ROW_HEIGHT_CM)
+    table.rows[0].height = Cm(ANEXO_III_HEADER_ROW_HEIGHT_CM)
 
     for module in practices:
         cells = table.add_row().cells
         values = [
-            title_without_hours(module.get("text", "")),
-            hours_from_text(module.get("text", "")),
-            scheduled_text(schedule, module.get("text", "")),
+            title_without_hours(module.text),
+            hours_from_text(module.text),
+            scheduled_text(schedule, module.text),
         ]
 
         for index, value in enumerate(values):

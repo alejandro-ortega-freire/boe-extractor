@@ -1,11 +1,12 @@
 from datetime import date, datetime, timedelta
 import re
 
-
-DEFAULT_SESSION_HOURS = 6
-MIN_SESSION_HOURS = 1
-MAX_SESSION_HOURS = 8
-DEFAULT_TEACHER_NAME = "Docente"
+from source.settings import (
+    DEFAULT_SESSION_HOURS,
+    DEFAULT_TEACHER_NAME,
+    MAX_SESSION_HOURS,
+    MIN_SESSION_HOURS,
+)
 
 
 def parse_hours(text):
@@ -189,9 +190,9 @@ def format_date_range(start_date, end_date, start_note=None, end_note=None):
 
 def iter_scheduled_items(modules):
     for module in modules:
-        module_text = module.get("text", "")
+        module_text = module.text
         module_code = code_from_text(module_text)
-        ufs = module.get("ufs", [])
+        ufs = module.ufs
 
         if module_code.startswith("MP"):
             yield module_code, parse_hours(module_text)
@@ -206,6 +207,7 @@ def iter_scheduled_items(modules):
 
 
 def calculate_schedule(modules, session_hours, start_date):
+    """Distribute module/UF hours over working days and carry partial sessions forward."""
     current_date = next_working_day(start_date)
     used_hours = 0
     dates_by_code = {}
