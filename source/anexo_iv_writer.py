@@ -2,22 +2,35 @@ from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Inches, Pt, RGBColor
+from docx.shared import Cm, Inches, Pt
 import re
 
 from source.anexo_iii_writer import (
-    ACTION_CODE,
-    PLACEHOLDER_ADDRESS,
-    PLACEHOLDER_CENTER,
-    PLACEHOLDER_LOCALITY,
-    PROVINCE,
     duration_for_anexo,
     schedule_date_range,
 )
 from source.content_assignment import assign_contents_to_criteria
+from source.docx_styles import (
+    ANEXO_IV_FONT_SIZE,
+    ANEXO_IV_MAIN_HEADER_ROW_HEIGHT_CM,
+    ANEXO_IV_TABLE_WIDTH_PERCENT,
+    ANEXO_IV_TABLE_HEADER_FILL,
+    ANEXO_IV_UF_ROW_MIN_HEIGHT_CM,
+    LIGHT_BORDER,
+    SUGGESTION_COLOR,
+    WHITE_FILL,
+)
 from source.docx_utils import add_horizontal_rule
 from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
+from source.settings import (
+    ACTION_CODE,
+    DEFAULT_TEACHER_NAME,
+    PLACEHOLDER_ADDRESS,
+    PLACEHOLDER_CENTER,
+    PLACEHOLDER_LOCALITY,
+    PROVINCE,
+)
 from source.table_styles import (
     apply_vertical_borders,
     set_exact_row_height,
@@ -28,13 +41,8 @@ from source.table_styles import (
 )
 
 
-ANEXO_IV_FONT_SIZE = 10
-TABLE_HEADER_FILL = "D9D9D9"
-WHITE_FILL = "FFFFFF"
-LIGHT_BORDER = "BFBFBF"
-UF_ROW_MIN_HEIGHT = Cm(1.4)
-MAIN_HEADER_ROW_HEIGHT = Cm(2.6)
-SUGGESTION_COLOR = RGBColor(192, 0, 0)
+UF_ROW_MIN_HEIGHT = Cm(ANEXO_IV_UF_ROW_MIN_HEIGHT_CM)
+MAIN_HEADER_ROW_HEIGHT = Cm(ANEXO_IV_MAIN_HEADER_ROW_HEIGHT_CM)
 
 
 def configure_page(section):
@@ -385,7 +393,7 @@ def add_anexo_iv_table(
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     table.autofit = False
-    set_table_width_percent(table, 100)
+    set_table_width_percent(table, ANEXO_IV_TABLE_WIDTH_PERCENT)
 
     headers = [
         "Objetivos específicos\nLogro de los\nresultados de\naprendizaje ¹",
@@ -397,7 +405,7 @@ def add_anexo_iv_table(
 
     for index, header in enumerate(headers):
         cell = table.rows[0].cells[index]
-        set_cell_shading(cell, TABLE_HEADER_FILL)
+        set_cell_shading(cell, ANEXO_IV_TABLE_HEADER_FILL)
         set_cell_text(cell, header)
         cell.width = widths[index]
 
@@ -444,7 +452,7 @@ def add_anexo_iv_table(
 
         for row_cells in (top_cells, bottom_cells):
             for index, cell in enumerate(row_cells):
-                set_cell_shading(cell, TABLE_HEADER_FILL)
+                set_cell_shading(cell, ANEXO_IV_TABLE_HEADER_FILL)
                 cell.width = widths[index]
 
         uf_label_cell = top_cells[0].merge(bottom_cells[0])
@@ -497,7 +505,7 @@ def create_anexo_iv_docx(
     copy_subcriteria=False,
     spaces=None,
     equipment_groups=None,
-    teacher_name="Docente"
+    teacher_name=DEFAULT_TEACHER_NAME
 ):
     doc = Document()
     configure_page(doc.sections[0])

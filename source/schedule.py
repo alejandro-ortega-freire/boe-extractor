@@ -1,11 +1,12 @@
 from datetime import date, datetime, timedelta
 import re
 
-
-DEFAULT_SESSION_HOURS = 6
-MIN_SESSION_HOURS = 1
-MAX_SESSION_HOURS = 8
-DEFAULT_TEACHER_NAME = "Docente"
+from source.settings import (
+    DEFAULT_SESSION_HOURS,
+    DEFAULT_TEACHER_NAME,
+    MAX_SESSION_HOURS,
+    MIN_SESSION_HOURS,
+)
 
 
 def parse_hours(text):

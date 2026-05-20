@@ -6,6 +6,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from source.anexo_iii_writer import add_anexo_iii
 from source.docx_utils import add_header_footer, add_horizontal_rule, safe_text
+from source.settings import DEFAULT_TEACHER_NAME
 
 
 def add_paragraph_with_m2_superscript(doc, text):
@@ -114,7 +115,7 @@ def create_info_docx(
     duration_text,
     training_modules,
     output_path,
-    teacher_name="Docente"
+    teacher_name=DEFAULT_TEACHER_NAME
 ):
     doc = Document()
 
@@ -232,7 +233,7 @@ def create_anexo_iii_docx(
     duration_text,
     output_path,
     schedule=None,
-    teacher_name="Docente"
+    teacher_name=DEFAULT_TEACHER_NAME
 ):
     doc = Document()
 
