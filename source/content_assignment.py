@@ -156,24 +156,24 @@ def contains_model_items(values, model_type):
     return any(isinstance(value, model_type) for value in values or [])
 
 
-def criteria_to_dicts(criteria):
+def criteria_to_models(criteria):
     return [
-        criterion.to_dict() if isinstance(criterion, Criterion) else criterion
+        criterion if isinstance(criterion, Criterion) else Criterion.from_dict(criterion)
         for criterion in criteria or []
     ]
 
 
-def contents_to_dicts(contents):
+def contents_to_models(contents):
     return [
-        content.to_dict() if isinstance(content, ContentItem) else content
+        content if isinstance(content, ContentItem) else ContentItem.from_dict(content)
         for content in contents or []
     ]
 
 
-def content_assignments_to_models(assignments):
+def content_assignments_to_dicts(assignments):
     return [
         [
-            ContentItem.from_dict(content)
+            content.to_dict() if isinstance(content, ContentItem) else content
             for content in contents
         ]
         for contents in assignments
@@ -223,36 +223,35 @@ def weighted_keywords(text):
 
 
 def bullet_plain_text(bullet):
-    parts = [bullet.get("text", "")]
+    parts = [bullet.text]
 
-    for child in bullet.get("children", []):
+    for child in bullet.children:
         parts.append(bullet_plain_text(child))
 
     return " ".join(part for part in parts if part)
 
 
 def content_segment_text(content, bullet=None):
-    parts = [content.get("title", "")]
+    parts = [content.title]
 
     if bullet:
         parts.append(bullet_plain_text(bullet))
     else:
-        parts.extend(bullet_plain_text(item) for item in content.get("bullets", []))
+        parts.extend(bullet_plain_text(item) for item in content.bullets)
 
     return " ".join(part for part in parts if part)
 
 
 def content_number(content):
-    match = re.match(r"^\s*(\d+)", content.get("title", ""))
-    return int(match.group(1)) if match else None
+    return content.number
 
 
 def criterion_text(criterion):
-    parts = [criterion.get("text", "")]
+    parts = [criterion.text]
 
-    for subcriterion in criterion.get("subcriteria", []):
-        parts.append(subcriterion.get("text", ""))
-        parts.extend(subcriterion.get("bullets", []))
+    for subcriterion in criterion.subcriteria:
+        parts.append(subcriterion.text)
+        parts.extend(subcriterion.bullets)
 
     return " ".join(part for part in parts if part)
 
@@ -301,14 +300,14 @@ def semantic_signature(text):
 
 
 def criterion_signature(criterion):
-    base_signature = semantic_signature(criterion.get("text", ""))
+    base_signature = semantic_signature(criterion.text)
     weighted = dict(base_signature["weights"])
-    all_text_parts = [criterion.get("text", "")]
+    all_text_parts = [criterion.text]
 
-    for subcriterion in criterion.get("subcriteria", []):
-        subcriterion_text = subcriterion.get("text", "")
+    for subcriterion in criterion.subcriteria:
+        subcriterion_text = subcriterion.text
         subcriterion_parts = [subcriterion_text]
-        subcriterion_parts.extend(subcriterion.get("bullets", []))
+        subcriterion_parts.extend(subcriterion.bullets)
         subcriterion_joined = " ".join(part for part in subcriterion_parts if part)
 
         if is_practical_case_text(subcriterion_text):
@@ -369,7 +368,7 @@ def should_split_content(content, contents, criterion_count):
 
 
 def content_is_partible(content):
-    bullets = content.get("bullets", [])
+    bullets = content.bullets
 
     if len(bullets) < 2:
         return False
@@ -562,16 +561,14 @@ def score_segment_for_criterion(criteria_signature, assigned_segments, segment, 
 
 
 def clone_content_with_bullets(content, bullets, suffix="", assignment=None):
-    title = content.get("title", "")
+    title = content.title
 
     if suffix and title:
         title = f"{title} ({suffix})"
 
-    return {
-        "title": title,
-        "bullets": bullets,
-        "assignment": assignment or {},
-    }
+    cloned = ContentItem(title=title, bullets=list(bullets or []))
+    cloned.assignment = assignment or {}
+    return cloned
 
 
 def split_bullets_into_chunks(bullets, max_parts, allow_extra_parts=False):
@@ -604,7 +601,7 @@ def split_content_segments(contents, criterion_count=1):
     segments = []
 
     for content_index, content in enumerate(contents or []):
-        bullets = content.get("bullets", [])
+        bullets = content.bullets
 
         if bullets and should_split_content(content, contents, criterion_count):
             chunks = split_bullets_into_chunks(bullets, criterion_count)
@@ -628,7 +625,7 @@ def split_content_segments(contents, criterion_count=1):
                 "content_index": content_index,
                 "bullet_index": 0,
                 "content": content,
-                "bullets": content.get("bullets", []),
+                "bullets": content.bullets,
                 "is_split": False,
                 "text": content_segment_text(content),
             })
@@ -640,7 +637,7 @@ def split_content_segments_for_coverage(contents):
     segments = []
 
     for content_index, content in enumerate(contents or []):
-        bullets = content.get("bullets", [])
+        bullets = content.bullets
 
         if bullets:
             chunks = split_bullets_into_chunks(
@@ -668,7 +665,7 @@ def split_content_segments_for_coverage(contents):
                 "content_index": content_index,
                 "bullet_index": 0,
                 "content": content,
-                "bullets": content.get("bullets", []),
+                "bullets": content.bullets,
                 "is_split": False,
                 "text": content_segment_text(content),
             })
@@ -741,7 +738,7 @@ def best_split_candidate(assigned_segments, criteria_signatures, empty_index):
             evaluation = content_match_evaluation(criteria_signatures[empty_index], candidate_segment["text"])
             distance_penalty = abs(donor_index - empty_index) * 0.75
             score = evaluation["score"] - distance_penalty
-            segment_number = content_number(segment.get("content", {}))
+            segment_number = content_number(segment["content"])
 
             if segment_number and segment_number - 1 == empty_index:
                 score += 14.0
@@ -925,7 +922,7 @@ def assign_segments_to_criteria(criteria, segments, use_content_numbers=True):
     enough_segments_for_criteria = len(segments) >= len(criteria)
 
     for segment_index, segment in enumerate(segments):
-        segment_number = content_number(segment.get("content", {})) if use_content_numbers else None
+        segment_number = content_number(segment["content"]) if use_content_numbers else None
         if not enough_segments_for_criteria and segment_index == len(segments) - 1:
             expected = len(criteria) - 1
         elif segment_number:
@@ -1062,7 +1059,7 @@ def render_assignments(contents, assigned_segments):
     ]
 
 
-def assign_content_dicts_to_criteria(criteria, contents):
+def assign_content_models_to_criteria(criteria, contents):
     if not criteria:
         return []
 
@@ -1091,11 +1088,11 @@ def assign_contents_to_criteria(criteria, contents):
         contains_model_items(criteria, Criterion)
         or contains_model_items(contents, ContentItem)
     )
-    criteria_dicts = criteria_to_dicts(criteria)
-    content_dicts = contents_to_dicts(contents)
-    assignments = assign_content_dicts_to_criteria(criteria_dicts, content_dicts)
+    criteria_models = criteria_to_models(criteria)
+    content_models = contents_to_models(contents)
+    assignments = assign_content_models_to_criteria(criteria_models, content_models)
 
     if return_models:
-        return content_assignments_to_models(assignments)
+        return assignments
 
-    return assignments
+    return content_assignments_to_dicts(assignments)
