@@ -1,6 +1,6 @@
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 
@@ -68,3 +68,63 @@ def set_cell_text(
     run = paragraph.add_run(str(text or ""))
     run.bold = bold
     run.font.size = Pt(size)
+
+
+def set_cell_vertical_borders(cell, color):
+    tc_pr = cell._tc.get_or_add_tcPr()
+    borders = tc_pr.first_child_found_in("w:tcBorders")
+
+    if borders is None:
+        borders = OxmlElement("w:tcBorders")
+        tc_pr.append(borders)
+
+    for border_name in ("left", "right"):
+        border = borders.find(qn(f"w:{border_name}"))
+
+        if border is None:
+            border = OxmlElement(f"w:{border_name}")
+            borders.append(border)
+
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), "4")
+        border.set(qn("w:space"), "0")
+        border.set(qn("w:color"), color)
+
+
+def set_table_vertical_borders(table, color):
+    table_pr = table._tbl.tblPr
+    borders = table_pr.find(qn("w:tblBorders"))
+
+    if borders is None:
+        borders = OxmlElement("w:tblBorders")
+        table_pr.append(borders)
+
+    for border_name in ("left", "right", "insideV"):
+        border = borders.find(qn(f"w:{border_name}"))
+
+        if border is None:
+            border = OxmlElement(f"w:{border_name}")
+            borders.append(border)
+
+        border.set(qn("w:val"), "single")
+        border.set(qn("w:sz"), "4")
+        border.set(qn("w:space"), "0")
+        border.set(qn("w:color"), color)
+
+
+def apply_vertical_borders(table, color):
+    set_table_vertical_borders(table, color)
+
+    for row in table.rows:
+        for cell in row.cells:
+            set_cell_vertical_borders(cell, color)
+
+
+def set_minimum_row_height(row, height):
+    row.height = height
+    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
+
+
+def set_exact_row_height(row, height):
+    row.height = height
+    row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY

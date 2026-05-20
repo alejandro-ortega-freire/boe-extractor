@@ -1,6 +1,6 @@
 from docx import Document
 from docx.enum.section import WD_ORIENT
-from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -20,8 +20,11 @@ from source.content_assignment import assign_contents_to_criteria
 from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
 from source.table_styles import (
+    apply_vertical_borders,
+    set_exact_row_height,
     set_cell_shading,
     set_cell_text as set_table_cell_text,
+    set_minimum_row_height,
     set_table_width_percent,
 )
 
@@ -45,64 +48,8 @@ def configure_page(section):
     section.right_margin = Inches(0.75)
 
 
-def set_cell_vertical_borders(cell, color=LIGHT_BORDER):
-    tc_pr = cell._tc.get_or_add_tcPr()
-    borders = tc_pr.first_child_found_in("w:tcBorders")
-
-    if borders is None:
-        borders = OxmlElement("w:tcBorders")
-        tc_pr.append(borders)
-
-    for border_name in ("left", "right"):
-        border = borders.find(qn(f"w:{border_name}"))
-
-        if border is None:
-            border = OxmlElement(f"w:{border_name}")
-            borders.append(border)
-
-        border.set(qn("w:val"), "single")
-        border.set(qn("w:sz"), "4")
-        border.set(qn("w:space"), "0")
-        border.set(qn("w:color"), color)
-
-
-def set_table_vertical_borders(table, color=LIGHT_BORDER):
-    table_pr = table._tbl.tblPr
-    borders = table_pr.find(qn("w:tblBorders"))
-
-    if borders is None:
-        borders = OxmlElement("w:tblBorders")
-        table_pr.append(borders)
-
-    for border_name in ("left", "right", "insideV"):
-        border = borders.find(qn(f"w:{border_name}"))
-
-        if border is None:
-            border = OxmlElement(f"w:{border_name}")
-            borders.append(border)
-
-        border.set(qn("w:val"), "single")
-        border.set(qn("w:sz"), "4")
-        border.set(qn("w:space"), "0")
-        border.set(qn("w:color"), color)
-
-
 def apply_light_vertical_borders(table):
-    set_table_vertical_borders(table)
-
-    for row in table.rows:
-        for cell in row.cells:
-            set_cell_vertical_borders(cell)
-
-
-def set_minimum_row_height(row, height=UF_ROW_MIN_HEIGHT):
-    row.height = height
-    row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
-
-
-def set_exact_row_height(row, height):
-    row.height = height
-    row.height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+    apply_vertical_borders(table, LIGHT_BORDER)
 
 
 def set_cell_text(cell, text, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT):
@@ -505,8 +452,8 @@ def add_anexo_iv_table(
 
         top_cells = table.add_row().cells
         bottom_cells = table.add_row().cells
-        set_minimum_row_height(table.rows[-2])
-        set_minimum_row_height(table.rows[-1])
+        set_minimum_row_height(table.rows[-2], UF_ROW_MIN_HEIGHT)
+        set_minimum_row_height(table.rows[-1], UF_ROW_MIN_HEIGHT)
 
         for row_cells in (top_cells, bottom_cells):
             for index, cell in enumerate(row_cells):
