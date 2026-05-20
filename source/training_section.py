@@ -43,15 +43,34 @@ def extract_uc_objective(text):
 
 
 def is_module_header(line):
-    """Detect module starts with or without accent: BOEs may use MÓDULO or MODULO."""
+    """
+    Detecta encabezados de módulos aunque el BOE use variantes como MÓDULO o
+    MODULO.
+
+    Esta comprobación marca fronteras duras de extracción: si falla, una UF o
+    criterio puede acabar asociado al módulo siguiente o anterior.
+    """
     return bool(re.match(r"^M[ÓO]DULO FORMATIVO\s+\d+", line, flags=re.IGNORECASE))
 
 
 def is_uf_header(line):
+    """
+    Detecta el inicio de una UF para separar criterios y contenidos dentro del
+    módulo actual.
+
+    Es deliberadamente simple porque el número de UF es la frontera fiable; el
+    código UF suele aparecer después en la línea "Código:".
+    """
     return bool(re.match(r"^UNIDAD FORMATIVA\s+\d+", line, flags=re.IGNORECASE))
 
 
 def is_practice_module_header(line):
+    """
+    Detecta el módulo de prácticas para detener la extracción formativa ordinaria.
+
+    Los módulos MP no tienen el mismo patrón de UFs/criterios/contenidos que los
+    MF, así que se tratan fuera del flujo principal de módulos formativos.
+    """
     return bool(re.match(r"^M[ÓO]DULO DE PRÁCTICAS", line, flags=re.IGNORECASE))
 
 
@@ -280,7 +299,13 @@ def parse_uf_block(uf_block):
 
 
 def parse_module_block(module_block):
-    """Parse one module and keep its UF block boundaries from swallowing the next module."""
+    """
+    Parsea un módulo manteniendo separada la cabecera del módulo y sus bloques UF.
+
+    La separación temprana evita que la lectura multilínea de "Asociado a la
+    Unidad de Competencia" absorba denominaciones, duraciones o criterios de la
+    primera UF.
+    """
     uf_start = None
 
     for i, line in enumerate(module_block):
@@ -385,7 +410,14 @@ def valid_uf(uf):
 
 
 def extract_training_modules(text, modules):
-    """Combine summary modules with detailed training-section data from the BOE body."""
+    """
+    Combina el resumen inicial del certificado con el detalle de la sección
+    formativa.
+
+    El resumen suele traer bien códigos y horas, mientras que la sección
+    formativa trae objetivos, criterios y UFs. Esta función decide qué fuente
+    usar en cada campo y mantiene una salida estable para el resto del pipeline.
+    """
     parsed_by_code = parse_training_section(text)
     result = []
 

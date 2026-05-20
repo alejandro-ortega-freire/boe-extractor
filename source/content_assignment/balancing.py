@@ -5,6 +5,15 @@ from source.content_assignment.splitting import (
 
 
 def rebalance_empty_content_assignments(assigned_segments, criteria_signatures=None):
+    """
+    Regla prioritaria: si existe contenido oficial disponible, ningún criterio
+    debe quedar sin contenido.
+
+    Cuando la similitud semántica deja huecos, primero intenta partir un bloque
+    del criterio más adecuado; si no es posible, mueve un segmento desde el
+    criterio vecino con más de una asignación. Esta regla pesa más que evitar
+    divisiones pequeñas.
+    """
     if not assigned_segments:
         return assigned_segments
 
@@ -63,6 +72,14 @@ def rebalance_empty_content_assignments(assigned_segments, criteria_signatures=N
 
 
 def ensure_all_segments_assigned(assigned_segments, segments):
+    """
+    Garantiza cobertura total: ningún segmento de contenido oficial puede quedar
+    fuera de la asignación final.
+
+    Esta función es el cinturón de seguridad después del scoring semántico. Si
+    algún subbloque no fue elegido, se coloca por orden aproximado en el criterio
+    esperado para preservar la progresión normal del BOE.
+    """
     assigned_ids = {
         id(segment)
         for criterion_segments in assigned_segments
@@ -88,6 +105,13 @@ def ensure_all_segments_assigned(assigned_segments, segments):
 
 
 def refresh_final_assignment_metadata(assigned_segments):
+    """
+    Actualiza la trazabilidad interna cuando el rebalanceo cambia una asignación.
+
+    La salida visible del Word no muestra estos metadatos, pero conservarlos
+    ayuda a distinguir asignaciones semánticas fuertes de movimientos de
+    cobertura hechos para cumplir las reglas finales.
+    """
     for criterion_index, criterion_segments in enumerate(assigned_segments):
         for segment in criterion_segments:
             assignment = segment.setdefault("assignment", {})

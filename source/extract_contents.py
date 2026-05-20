@@ -184,7 +184,15 @@ def add_bullet_by_indent(state, text, x0):
 
 
 def should_continue_previous_bullet(state, x0):
-    """Detect PDF line wraps that look like new bullets but continue the previous one."""
+    """
+    Detecta líneas partidas por el PDF que parecen nuevos bullets pero continúan
+    el bullet anterior.
+
+    Ejemplo real: el BOE puede partir "información de novedades sectoriales."
+    en dos líneas, dejando "sectoriales." con una geometría parecida a un
+    sub-bullet. Si el bullet anterior no parece terminado, esta regla evita
+    crear un nivel de lista falso.
+    """
     if not state["bullet_stack"]:
         return False
 
@@ -197,7 +205,14 @@ def should_continue_previous_bullet(state, x0):
 
 
 def parse_content_line(line, target, state):
-    """Add one geometric text line to the current content tree, preserving bullet nesting."""
+    """
+    Convierte una línea geométrica del PDF en título de contenido, bullet o
+    continuación de texto.
+
+    La extracción de contenidos depende de la posición horizontal porque el BOE
+    representa niveles de lista visualmente. Esta función concentra esa decisión
+    para no mezclar bullets reales con líneas envueltas por el PDF.
+    """
     text = clean_line(line["text"])
     x0 = line["x0"]
 
@@ -255,7 +270,14 @@ def parse_content_line(line, target, state):
 
 
 def extract_contents_geometric(pdf_path):
-    """Extract numbered contents by walking the BOE training section page by page."""
+    """
+    Extrae contenidos numerados recorriendo la sección formativa página a página.
+
+    Se usa esta ruta geométrica porque la extracción plana de texto pierde
+    demasiada información de indentación y puede mezclar contenidos de UFs
+    consecutivas. Aquí se mantiene el módulo/UF activo y se corta al llegar a
+    prescripciones o prácticas.
+    """
     doc = fitz.open(pdf_path)
 
     result = {}
@@ -348,7 +370,14 @@ def extract_contents_geometric(pdf_path):
 
 
 def merge_geometric_contents(training_modules, contents_by_module):
-    """Overlay geometric contents onto modules already found in the textual summary."""
+    """
+    Sustituye los contenidos textuales por los contenidos geométricos cuando
+    coinciden módulo y UF.
+
+    La estructura base de módulos viene de la lectura textual, pero los
+    contenidos son más fiables desde la geometría. La fusión respeta fronteras
+    duras: nunca copia contenidos entre módulos ni entre UFs distintas.
+    """
     for module in training_modules:
         identifier = module.get("identifier", "")
         mf_match = re.search(r"\bMF\d{4}_\d\b", identifier)
