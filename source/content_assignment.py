@@ -1084,6 +1084,7 @@ def assign_content_models_to_criteria(criteria, contents):
 
 
 def assign_contents_to_criteria(criteria, contents):
+    """Assign official contents to criteria while preserving model/dict caller compatibility."""
     return_models = (
         contains_model_items(criteria, Criterion)
         or contains_model_items(contents, ContentItem)

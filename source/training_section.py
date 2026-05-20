@@ -43,6 +43,7 @@ def extract_uc_objective(text):
 
 
 def is_module_header(line):
+    """Detect module starts with or without accent: BOEs may use MÓDULO or MODULO."""
     return bool(re.match(r"^M[ÓO]DULO FORMATIVO\s+\d+", line, flags=re.IGNORECASE))
 
 
@@ -279,6 +280,7 @@ def parse_uf_block(uf_block):
 
 
 def parse_module_block(module_block):
+    """Parse one module and keep its UF block boundaries from swallowing the next module."""
     uf_start = None
 
     for i, line in enumerate(module_block):
@@ -383,6 +385,7 @@ def valid_uf(uf):
 
 
 def extract_training_modules(text, modules):
+    """Combine summary modules with detailed training-section data from the BOE body."""
     parsed_by_code = parse_training_section(text)
     result = []
 

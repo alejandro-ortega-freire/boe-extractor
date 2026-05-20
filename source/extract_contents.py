@@ -184,6 +184,7 @@ def add_bullet_by_indent(state, text, x0):
 
 
 def should_continue_previous_bullet(state, x0):
+    """Detect PDF line wraps that look like new bullets but continue the previous one."""
     if not state["bullet_stack"]:
         return False
 
@@ -196,6 +197,7 @@ def should_continue_previous_bullet(state, x0):
 
 
 def parse_content_line(line, target, state):
+    """Add one geometric text line to the current content tree, preserving bullet nesting."""
     text = clean_line(line["text"])
     x0 = line["x0"]
 
@@ -253,6 +255,7 @@ def parse_content_line(line, target, state):
 
 
 def extract_contents_geometric(pdf_path):
+    """Extract numbered contents by walking the BOE training section page by page."""
     doc = fitz.open(pdf_path)
 
     result = {}
@@ -345,6 +348,7 @@ def extract_contents_geometric(pdf_path):
 
 
 def merge_geometric_contents(training_modules, contents_by_module):
+    """Overlay geometric contents onto modules already found in the textual summary."""
     for module in training_modules:
         identifier = module.get("identifier", "")
         mf_match = re.search(r"\bMF\d{4}_\d\b", identifier)

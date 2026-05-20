@@ -139,6 +139,7 @@ def is_contents_title(text):
 
 
 def is_criterion_start(text):
+    """Accept C1/C2 starts even when the BOE omits the section title before them."""
     return bool(re.match(r"^C\d+\b:?", text))
 
 
@@ -194,6 +195,7 @@ def parse_criteria_line(
     target,
     state
 ):
+    """Attach one parsed line to C/CE structures, including CE bullet continuations."""
     text = line["text"]
 
     if is_criterion_start(text):
@@ -261,6 +263,7 @@ def parse_criteria_line(
 
 
 def extract_criteria_geometric(pdf_path):
+    """Extract criteria from page geometry so UFs survive broken or missing text headings."""
     doc = fitz.open(pdf_path)
 
     result = {}
@@ -395,6 +398,7 @@ def extract_criteria_geometric(pdf_path):
 
 
 def merge_geometric_criteria(training_modules, criteria_by_module):
+    """Prefer geometric criteria when merging them into the normalized training modules."""
     for module in training_modules:
         identifier = module.get("identifier", "")
         mf_match = re.search(r"\bMF\d{4}_\d\b", identifier)

@@ -206,6 +206,7 @@ def iter_scheduled_items(modules):
 
 
 def calculate_schedule(modules, session_hours, start_date):
+    """Distribute module/UF hours over working days and carry partial sessions forward."""
     current_date = next_working_day(start_date)
     used_hours = 0
     dates_by_code = {}
