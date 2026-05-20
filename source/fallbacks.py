@@ -1,6 +1,6 @@
 import re
 
-from source.cleaning import clean_line, dedupe_list, is_boe_noise
+from source.cleaning import clean_line, dedupe_list, is_boe_noise, clean_dot_leaders
 from source.geometry import merge_lowercase_continuations
 
 
@@ -47,6 +47,8 @@ def fallback_spaces_from_text(text):
         if len(nums) >= 2:
             name = re.sub(r"\b\d+(?:,\d+)?\b", "", line).strip()
             name = clean_line(name)
+            name = clean_dot_leaders(name)
+            name = re.sub(r"\s*\.\s*$", "", name)
 
             if name and len(name) > 3 and not name.lower().startswith("alumnos"):
                 spaces.append(
@@ -101,6 +103,7 @@ def fallback_equipment_from_text(text):
         )
 
         line = re.sub(r"^-+\s*", "", line).strip()
+        line = clean_line(line)
 
         if not line:
             continue

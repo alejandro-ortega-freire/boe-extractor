@@ -38,6 +38,7 @@ def clean_line(line):
     line = re.sub(r"\.{3,}", " ", line)
 
     line = re.sub(r"\s+", " ", line)
+    line = re.sub(r"\s+([.,;:])", r"\1", line)
     return line.strip()
 
 

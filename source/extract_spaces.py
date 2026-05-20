@@ -15,6 +15,7 @@ from source.geometry import (
 def clean_space_name(name):
     name = clean_line(name)
     name = clean_dot_leaders(name)
+    name = re.sub(r"\s*\.\s*$", "", name)
     return name
 
 

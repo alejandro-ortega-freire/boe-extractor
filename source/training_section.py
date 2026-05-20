@@ -43,7 +43,7 @@ def extract_uc_objective(text):
 
 
 def is_module_header(line):
-    return bool(re.match(r"^MÓDULO FORMATIVO\s+\d+", line, flags=re.IGNORECASE))
+    return bool(re.match(r"^M[ÓO]DULO FORMATIVO\s+\d+", line, flags=re.IGNORECASE))
 
 
 def is_uf_header(line):
@@ -51,7 +51,7 @@ def is_uf_header(line):
 
 
 def is_practice_module_header(line):
-    return bool(re.match(r"^MÓDULO DE PRÁCTICAS", line, flags=re.IGNORECASE))
+    return bool(re.match(r"^M[ÓO]DULO DE PRÁCTICAS", line, flags=re.IGNORECASE))
 
 
 def get_first_value_after_label(lines, label):
@@ -71,7 +71,7 @@ def get_first_value_after_label(lines, label):
                     continue
 
                 if re.match(
-                    r"^(Código:|Nivel de cualificación profesional:|Asociado a la Unidad de Competencia:|Duración:|Capacidades y criterios de evaluación|UNIDAD FORMATIVA|MÓDULO FORMATIVO)",
+                    r"^(Código:|Nivel de cualificación profesional:|Asociado a la Unidad de Competencia:|Duración:|Capacidades y criterios de evaluación|UNIDAD FORMATIVA|M[ÓO]DULO FORMATIVO)",
                     next_line,
                     flags=re.IGNORECASE
                 ):
@@ -296,8 +296,8 @@ def parse_module_block(module_block):
             r"^Duración:",
             r"^Capacidades y criterios de evaluación",
             r"^UNIDAD FORMATIVA\s+\d+",
-            r"^MÓDULO FORMATIVO\s+\d+",
-            r"^MÓDULO DE PRÁCTICAS"
+            r"^M[ÓO]DULO FORMATIVO\s+\d+",
+            r"^M[ÓO]DULO DE PRÁCTICAS"
         ]
     )
 

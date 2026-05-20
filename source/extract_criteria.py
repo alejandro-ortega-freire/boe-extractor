@@ -138,6 +138,10 @@ def is_contents_title(text):
     return text.startswith("Contenidos")
 
 
+def is_criterion_start(text):
+    return bool(re.match(r"^C\d+\b:?", text))
+
+
 def extract_mf_code(text):
     match = re.search(r"\bMF\d{4}_\d\b", text)
     return match.group(0) if match else ""
@@ -192,7 +196,7 @@ def parse_criteria_line(
 ):
     text = line["text"]
 
-    if re.match(r"^C\d+\b:?", text):
+    if is_criterion_start(text):
         criterion = {
             "text": text,
             "subcriteria": []
@@ -362,6 +366,20 @@ def extract_criteria_geometric(pdf_path):
                     "last_bullet_x": None,
                 }
                 continue
+
+            if not in_criteria and is_criterion_start(text):
+                target = get_current_target(result, current_module, current_uf)
+
+                if target is not None:
+                    in_criteria = True
+                    state = {
+                        "current_criterion": None,
+                        "current_subcriterion": None,
+                        "last_bullet": None,
+                        "last_bullet_x": None,
+                    }
+                    parse_criteria_line(line, target, state)
+                    continue
 
             if not in_criteria:
                 continue

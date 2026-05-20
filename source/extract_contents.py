@@ -189,7 +189,7 @@ def should_continue_previous_bullet(state, x0):
 
     current = state["bullet_stack"][-1]
 
-    if abs(x0 - current["x0"]) > 4:
+    if x0 < current["x0"] - 4:
         return False
 
     return not ends_like_complete_item(current["bullet"]["text"])
