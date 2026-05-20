@@ -1,11 +1,15 @@
 import re
 
 from docx.enum.section import WD_ORIENT, WD_SECTION
-from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Inches, Pt, RGBColor
 from source.schedule import code_from_text, format_date_range, format_holiday_note
-from source.table_styles import set_cell_margins, set_cell_shading, set_table_width_percent
+from source.table_styles import (
+    set_cell_shading,
+    set_cell_text as set_table_cell_text,
+    set_table_width_percent,
+)
 
 
 PLACEHOLDER_DATES = "FECHAS PENDIENTES"
@@ -58,27 +62,15 @@ def duration_for_anexo(duration_text):
     return duration_text.upper()
 
 
-def set_cell_text(
-    cell,
-    text,
-    bold=False,
-    size=ANEXO_FONT_SIZE,
-    align=WD_ALIGN_PARAGRAPH.LEFT,
-    vertical_padding=True
-):
-    cell.text = ""
-
-    if vertical_padding:
-        set_cell_margins(cell)
-
-    paragraph = cell.paragraphs[0]
-    paragraph.alignment = align
-    paragraph.paragraph_format.space_before = Pt(0)
-    paragraph.paragraph_format.space_after = Pt(0)
-    run = paragraph.add_run(str(text or ""))
-    run.bold = bold
-    run.font.size = Pt(size)
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+def set_cell_text(cell, text, bold=False, size=ANEXO_FONT_SIZE, align=WD_ALIGN_PARAGRAPH.LEFT, vertical_padding=True):
+    set_table_cell_text(
+        cell,
+        text,
+        bold=bold,
+        size=size,
+        align=align,
+        vertical_padding=vertical_padding,
+    )
 
 
 def set_header_cell(cell, text):

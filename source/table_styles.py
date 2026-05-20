@@ -1,5 +1,8 @@
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt
 
 
 def set_cell_shading(cell, fill):
@@ -38,3 +41,30 @@ def set_cell_margins(cell, top=140, bottom=140):
 
         margin.set(qn("w:w"), str(value))
         margin.set(qn("w:type"), "dxa")
+
+
+def set_cell_text(
+    cell,
+    text,
+    *,
+    bold=False,
+    size=10,
+    align=WD_ALIGN_PARAGRAPH.LEFT,
+    vertical_alignment=WD_ALIGN_VERTICAL.CENTER,
+    vertical_padding=False,
+    margin_top=140,
+    margin_bottom=140,
+):
+    cell.text = ""
+    cell.vertical_alignment = vertical_alignment
+
+    if vertical_padding:
+        set_cell_margins(cell, top=margin_top, bottom=margin_bottom)
+
+    paragraph = cell.paragraphs[0]
+    paragraph.alignment = align
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+    run = paragraph.add_run(str(text or ""))
+    run.bold = bold
+    run.font.size = Pt(size)

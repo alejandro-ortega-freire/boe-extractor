@@ -19,7 +19,11 @@ from source.anexo_iii_writer import (
 from source.content_assignment import assign_contents_to_criteria
 from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
-from source.table_styles import set_cell_shading, set_table_width_percent
+from source.table_styles import (
+    set_cell_shading,
+    set_cell_text as set_table_cell_text,
+    set_table_width_percent,
+)
 
 
 ANEXO_IV_FONT_SIZE = 10
@@ -102,15 +106,14 @@ def set_exact_row_height(row, height):
 
 
 def set_cell_text(cell, text, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT):
-    cell.text = ""
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    paragraph = cell.paragraphs[0]
-    paragraph.alignment = align
-    paragraph.paragraph_format.space_before = Pt(0)
-    paragraph.paragraph_format.space_after = Pt(0)
-    run = paragraph.add_run(str(text or ""))
-    run.bold = bold
-    run.font.size = Pt(ANEXO_IV_FONT_SIZE)
+    set_table_cell_text(
+        cell,
+        text,
+        bold=bold,
+        size=ANEXO_IV_FONT_SIZE,
+        align=align,
+        vertical_alignment=WD_ALIGN_VERTICAL.CENTER,
+    )
 
 
 def clear_cell(cell):
