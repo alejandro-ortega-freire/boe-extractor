@@ -580,7 +580,7 @@ def create_anexo_iv_docx(
     add_anexo_iv_table(doc, module, schedule, copy_subcriteria, spaces, equipment_groups)
 
     if add_header_footer is None:
-        from source.word_writer import add_header_footer
+        from source.docx_utils import add_header_footer
 
     add_header_footer(doc, teacher_name)
 

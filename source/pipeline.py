@@ -16,7 +16,8 @@ from source.models import DocumentPayload
 from source.normalization import normalize_document_payload
 from source.schedule import calculate_schedule
 from source.training_section import extract_training_modules
-from source.word_writer import add_header_footer, create_anexo_iii_docx, create_info_docx
+from source.docx_utils import add_header_footer
+from source.word_writer import create_anexo_iii_docx, create_info_docx
 
 
 def safe_path_name(value, fallback):
