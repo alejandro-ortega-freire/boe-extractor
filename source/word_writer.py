@@ -3,11 +3,9 @@ import re
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 
 from source.anexo_iii_writer import add_anexo_iii
-from source.docx_utils import add_header_footer, safe_text
+from source.docx_utils import add_header_footer, add_horizontal_rule, safe_text
 
 
 def add_paragraph_with_m2_superscript(doc, text):
@@ -27,21 +25,7 @@ def add_paragraph_with_m2_superscript(doc, text):
 
 
 def add_separator_line(doc):
-    p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(12)
-    p.paragraph_format.space_after = Pt(12)
-
-    p_pr = p._p.get_or_add_pPr()
-    p_bdr = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), "8")
-    bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), "808080")
-
-    p_bdr.append(bottom)
-    p_pr.append(p_bdr)
+    add_horizontal_rule(doc, color="808080")
 
 
 def add_bold_prefix_paragraph(doc, text, left_indent=0):

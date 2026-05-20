@@ -2,8 +2,6 @@ from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
 import re
 
@@ -17,6 +15,7 @@ from source.anexo_iii_writer import (
     schedule_date_range,
 )
 from source.content_assignment import assign_contents_to_criteria
+from source.docx_utils import add_horizontal_rule
 from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
 from source.table_styles import (
@@ -242,19 +241,7 @@ def set_strategy_placeholder_cell_text(cell):
 
 
 def add_horizontal_line(doc):
-    paragraph = doc.add_paragraph()
-    paragraph.paragraph_format.space_before = Pt(14)
-    paragraph.paragraph_format.space_after = Pt(10)
-
-    p_pr = paragraph._p.get_or_add_pPr()
-    p_bdr = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), "8")
-    bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), "000000")
-    p_bdr.append(bottom)
-    p_pr.append(p_bdr)
+    add_horizontal_rule(doc, color="000000", space_before=14, space_after=10)
 
 
 def add_heading(doc, text, size=12, space_after=6):

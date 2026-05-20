@@ -31,6 +31,23 @@ def clear_paragraph(paragraph):
     paragraph._p.clear_content()
 
 
+def add_horizontal_rule(doc, *, color="000000", space_before=12, space_after=12, size=8, space=1):
+    paragraph = doc.add_paragraph()
+    paragraph.paragraph_format.space_before = Pt(space_before)
+    paragraph.paragraph_format.space_after = Pt(space_after)
+
+    p_pr = paragraph._p.get_or_add_pPr()
+    p_bdr = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), str(size))
+    bottom.set(qn("w:space"), str(space))
+    bottom.set(qn("w:color"), color)
+    p_bdr.append(bottom)
+    p_pr.append(p_bdr)
+    return paragraph
+
+
 def add_header_footer(doc, teacher_name="Docente"):
     for section in doc.sections:
         section.header.is_linked_to_previous = False
