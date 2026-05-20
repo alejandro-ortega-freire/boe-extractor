@@ -1,6 +1,8 @@
 import re
 import unicodedata
 
+from source.models import ContentItem, Criterion
+
 
 SMALL_CONTENT_SPLIT_PENALTY = 4.0
 MAX_CONTENT_PARTS = 2
@@ -148,6 +150,34 @@ PRACTICAL_CASE_MARKERS = (
     "ante un supuesto practico",
     "a partir de un supuesto practico",
 )
+
+
+def contains_model_items(values, model_type):
+    return any(isinstance(value, model_type) for value in values or [])
+
+
+def criteria_to_dicts(criteria):
+    return [
+        criterion.to_dict() if isinstance(criterion, Criterion) else criterion
+        for criterion in criteria or []
+    ]
+
+
+def contents_to_dicts(contents):
+    return [
+        content.to_dict() if isinstance(content, ContentItem) else content
+        for content in contents or []
+    ]
+
+
+def content_assignments_to_models(assignments):
+    return [
+        [
+            ContentItem.from_dict(content)
+            for content in contents
+        ]
+        for contents in assignments
+    ]
 
 
 def strip_accents(text):
@@ -1032,7 +1062,7 @@ def render_assignments(contents, assigned_segments):
     ]
 
 
-def assign_contents_to_criteria(criteria, contents):
+def assign_content_dicts_to_criteria(criteria, contents):
     if not criteria:
         return []
 
@@ -1054,3 +1084,18 @@ def assign_contents_to_criteria(criteria, contents):
     segments = split_content_segments(contents, len(criteria))
     assigned_segments = assign_segments_to_criteria(criteria, segments)
     return render_assignments(contents, assigned_segments)
+
+
+def assign_contents_to_criteria(criteria, contents):
+    return_models = (
+        contains_model_items(criteria, Criterion)
+        or contains_model_items(contents, ContentItem)
+    )
+    criteria_dicts = criteria_to_dicts(criteria)
+    content_dicts = contents_to_dicts(contents)
+    assignments = assign_content_dicts_to_criteria(criteria_dicts, content_dicts)
+
+    if return_models:
+        return content_assignments_to_models(assignments)
+
+    return assignments

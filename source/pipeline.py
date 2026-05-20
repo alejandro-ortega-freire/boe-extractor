@@ -74,7 +74,7 @@ def process_pdf(pdf_path, config):
     base_name = os.path.splitext(os.path.basename(pdf_path))[0]
     payload = build_payload(pdf_path)
     schedule = calculate_schedule(
-        [module.to_dict() for module in payload.modules],
+        payload.modules,
         config["session_hours"],
         config["start_date"]
     )
@@ -93,19 +93,19 @@ def process_pdf(pdf_path, config):
     )
 
     create_info_docx(
-        payload.data.to_dict(),
-        [module.to_dict() for module in payload.modules],
+        payload.data,
+        payload.modules,
         payload.spaces,
-        [group.to_dict() for group in payload.equipment_groups],
+        payload.equipment_groups,
         payload.duration_text,
-        [module.to_dict() for module in payload.training_modules],
+        payload.training_modules,
         info_output_path,
         config["teacher_name"]
     )
 
     create_anexo_iii_docx(
-        payload.data.to_dict(),
-        [module.to_dict() for module in payload.modules],
+        payload.data,
+        payload.modules,
         payload.duration_text,
         anexo_output_path,
         schedule,
@@ -125,15 +125,15 @@ def process_pdf(pdf_path, config):
         )
 
         create_anexo_iv_docx(
-            payload.data.to_dict(),
-            training_module.to_dict(),
+            payload.data,
+            training_module,
             payload.duration_text,
             anexo_iv_output_path,
             schedule,
             add_header_footer,
             config["copy_subcriteria"],
             payload.spaces,
-            [group.to_dict() for group in payload.equipment_groups],
+            payload.equipment_groups,
             config["teacher_name"]
         )
 

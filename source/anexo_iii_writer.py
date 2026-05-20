@@ -23,7 +23,7 @@ DATES_COLUMN_WIDTH = Cm(5.5)
 
 
 def is_practice_module(module):
-    return code_from_text(module.get("text", "")).startswith("MP")
+    return code_from_text(module.text).startswith("MP")
 
 
 def certificate_modules(modules):
@@ -185,8 +185,8 @@ def add_anexo_header(doc, data, duration_text, schedule=None):
     doc.add_paragraph("")
 
     certificate = (
-        f"{ACTION_CODE} {data.get('codigo', '')} "
-        f"{data.get('nombre', '').upper()}"
+        f"{ACTION_CODE} {data.codigo} "
+        f"{data.nombre.upper()}"
     ).strip()
 
     add_tabbed_label_line(doc, [
@@ -215,9 +215,9 @@ def scheduled_text(schedule, text):
 
 
 def module_rows(module, schedule=None):
-    module_text = title_without_hours(module.get("text", ""))
-    module_hours = hours_from_text(module.get("text", ""))
-    ufs = module.get("ufs", [])
+    module_text = title_without_hours(module.text)
+    module_hours = hours_from_text(module.text)
+    ufs = module.ufs
 
     if not ufs:
         return [{
@@ -225,7 +225,7 @@ def module_rows(module, schedule=None):
             "module_hours": module_hours,
             "uf": "",
             "uf_hours": "",
-            "dates": scheduled_text(schedule, module.get("text", "")),
+            "dates": scheduled_text(schedule, module.text),
         }]
 
     rows = []
@@ -346,9 +346,9 @@ def add_practice_table(doc, modules, schedule=None):
     for module in practices:
         cells = table.add_row().cells
         values = [
-            title_without_hours(module.get("text", "")),
-            hours_from_text(module.get("text", "")),
-            scheduled_text(schedule, module.get("text", "")),
+            title_without_hours(module.text),
+            hours_from_text(module.text),
+            scheduled_text(schedule, module.text),
         ]
 
         for index, value in enumerate(values):

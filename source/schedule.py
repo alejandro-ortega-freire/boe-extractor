@@ -189,9 +189,9 @@ def format_date_range(start_date, end_date, start_note=None, end_note=None):
 
 def iter_scheduled_items(modules):
     for module in modules:
-        module_text = module.get("text", "")
+        module_text = module.text
         module_code = code_from_text(module_text)
-        ufs = module.get("ufs", [])
+        ufs = module.ufs
 
         if module_code.startswith("MP"):
             yield module_code, parse_hours(module_text)

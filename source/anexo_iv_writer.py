@@ -18,6 +18,7 @@ from source.anexo_iii_writer import (
     set_table_width_percent,
 )
 from source.content_assignment import assign_contents_to_criteria
+from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
 
 
@@ -152,24 +153,24 @@ def add_prefixed_text(paragraph, text, italic=False):
 
 def set_criterion_cell_text(cell, criterion, include_subcriteria=False):
     paragraph = clear_cell(cell)
-    add_prefixed_text(paragraph, criterion.get("text", ""))
+    add_prefixed_text(paragraph, criterion.text)
 
     if not include_subcriteria:
         return
 
-    if criterion.get("subcriteria"):
+    if criterion.subcriteria:
         spacer = cell.add_paragraph()
         spacer.paragraph_format.space_before = Pt(0)
         spacer.paragraph_format.space_after = Pt(0)
 
-    for subcriterion in criterion.get("subcriteria", []):
+    for subcriterion in criterion.subcriteria:
         paragraph = cell.add_paragraph()
         paragraph.paragraph_format.left_indent = Pt(0)
         paragraph.paragraph_format.space_before = Pt(0)
         paragraph.paragraph_format.space_after = Pt(0)
-        add_prefixed_text(paragraph, subcriterion.get("text", ""), italic=True)
+        add_prefixed_text(paragraph, subcriterion.text, italic=True)
 
-        for bullet in subcriterion.get("bullets", []):
+        for bullet in subcriterion.bullets:
             add_hyphen_item(cell, bullet, italic=True)
 
 
@@ -212,7 +213,7 @@ def set_spaces_equipment_cell_text(cell, spaces=None, equipment_groups=None):
     equipment_items = []
 
     for group in equipment_groups or []:
-        equipment_items.extend(item for item in group.get("items", []) if item)
+        equipment_items.extend(item for item in group.items if item)
 
     clear_cell(cell)
     cell.paragraphs[0].paragraph_format.space_after = Pt(0)
@@ -233,12 +234,12 @@ def set_spaces_equipment_cell_text(cell, spaces=None, equipment_groups=None):
 
 def add_content_bullets(cell, bullets, level=0, color=None):
     for bullet in bullets or []:
-        text = bullet.get("text", "")
+        text = bullet.text
 
         if text:
             add_hyphen_item(cell, text, level, color=color)
 
-        add_content_bullets(cell, bullet.get("children", []), level + 1, color=color)
+        add_content_bullets(cell, bullet.children, level + 1, color=color)
 
 
 def set_contents_cell_text(cell, contents=None, suggested=False):
@@ -250,7 +251,7 @@ def set_contents_cell_text(cell, contents=None, suggested=False):
         return
 
     for index, content in enumerate(contents):
-        title = content.get("title", "")
+        title = content.title
 
         if title:
             paragraph = cell.paragraphs[0] if index == 0 else cell.add_paragraph()
@@ -262,7 +263,7 @@ def set_contents_cell_text(cell, contents=None, suggested=False):
             if color:
                 run.font.color.rgb = color
 
-        add_content_bullets(cell, content.get("bullets", []), color=color)
+        add_content_bullets(cell, content.bullets, color=color)
 
 
 def set_strategy_placeholder_cell_text(cell):
@@ -356,17 +357,16 @@ def scheduled_text(schedule, code):
 
 
 def module_title(module):
-    identifier = module.get("identifier", "")
     return module_identifier_without_hours(module).replace(":", "", 1).strip()
 
 
 def module_identifier_without_hours(module):
-    identifier = module.get("identifier", "")
+    identifier = module.identifier
     return re.sub(r"\s*\(\d+\s*horas?\)\s*\.?\s*$", "", identifier, flags=re.IGNORECASE).strip()
 
 
 def module_schedule_text(schedule, module):
-    module_code = code_from_text(module.get("identifier", ""))
+    module_code = code_from_text(module.identifier)
     direct_dates = scheduled_text(schedule, module_code)
 
     if direct_dates:
@@ -374,8 +374,8 @@ def module_schedule_text(schedule, module):
 
     uf_dates = []
 
-    for uf in module.get("ufs", []):
-        scheduled = schedule.get("dates_by_code", {}).get(uf.get("code", "")) if schedule else None
+    for uf in module.ufs:
+        scheduled = schedule.get("dates_by_code", {}).get(uf.code) if schedule else None
 
         if scheduled:
             uf_dates.append(scheduled)
@@ -397,11 +397,11 @@ def add_module_header(doc, data, module, duration_text, schedule):
     add_heading(doc, "Programación didáctica", size=12, space_after=4)
     add_heading(doc, "(Modalidad Presencial)", size=12, space_after=16)
 
-    certificate = f"{data.get('codigo', '')} {data.get('nombre', '').upper()}".strip()
+    certificate = f"{data.codigo} {data.nombre.upper()}".strip()
 
     add_tabbed_line(doc, [("CERTIFICADO PROFESIONAL: ", certificate)])
-    add_tabbed_line(doc, [("FAMILIA PROFESIONAL: ", data.get("familia", ""))])
-    add_tabbed_line(doc, [("NIVEL DE CUALIFICACIÓN PROFESIONAL: ", data.get("nivel", ""))])
+    add_tabbed_line(doc, [("FAMILIA PROFESIONAL: ", data.familia)])
+    add_tabbed_line(doc, [("NIVEL DE CUALIFICACIÓN PROFESIONAL: ", data.nivel)])
     doc.add_paragraph("")
 
     add_tabbed_line(
@@ -432,13 +432,13 @@ def add_module_header(doc, data, module, duration_text, schedule):
     add_tabbed_line(
         doc,
         [
-            ("HORAS: ", module.get("hours", "")),
+            ("HORAS: ", module.hours),
             ("FECHAS DE IMPARTICIÓN DEL MÓDULO: ", module_dates),
         ],
         tab_stops=[Inches(1.2)],
     )
     add_tabbed_line(doc, [("Nº DE CURSO: ", ACTION_CODE)])
-    add_tabbed_line(doc, [("Objetivo general del módulo: ", module.get("objective", ""))])
+    add_tabbed_line(doc, [("Objetivo general del módulo: ", module.objective)])
 
 
 def add_anexo_iv_table(
@@ -473,11 +473,11 @@ def add_anexo_iv_table(
 
     set_exact_row_height(table.rows[0], MAIN_HEADER_ROW_HEIGHT)
 
-    ufs = module.get("ufs", [])
+    ufs = module.ufs
 
     if not ufs:
-        criteria = module.get("criteria", []) or [{}]
-        contents_by_criterion = assign_contents_to_criteria(criteria, module.get("contents", []))
+        criteria = module.criteria or [Criterion()]
+        contents_by_criterion = assign_contents_to_criteria(criteria, module.contents)
         suggested_contents = len(criteria) > 1
 
         for criterion_index, criterion in enumerate(criteria):
@@ -503,8 +503,8 @@ def add_anexo_iv_table(
         return table
 
     for uf in ufs:
-        uf_code = uf.get("code", "")
-        uf_name = uf.get("name", "")
+        uf_code = uf.code
+        uf_name = uf.name
         uf_dates = scheduled_text(schedule, uf_code)
 
         top_cells = table.add_row().cells
@@ -525,15 +525,15 @@ def add_anexo_iv_table(
         set_cell_shading(uf_name_cell, WHITE_FILL)
 
         set_cell_text(top_cells[2], "Horas")
-        set_cell_text(top_cells[3], uf.get("hours", ""), align=WD_ALIGN_PARAGRAPH.CENTER)
+        set_cell_text(top_cells[3], uf.hours, align=WD_ALIGN_PARAGRAPH.CENTER)
         set_cell_shading(top_cells[3], WHITE_FILL)
 
         set_cell_text(bottom_cells[2], "Fechas de impartición")
         set_cell_text(bottom_cells[3], uf_dates, align=WD_ALIGN_PARAGRAPH.CENTER)
         set_cell_shading(bottom_cells[3], WHITE_FILL)
 
-        criteria = uf.get("criteria", []) or [{}]
-        contents_by_criterion = assign_contents_to_criteria(criteria, uf.get("contents", []))
+        criteria = uf.criteria or [Criterion()]
+        contents_by_criterion = assign_contents_to_criteria(criteria, uf.contents)
         suggested_contents = len(criteria) > 1
 
         for criterion_index, criterion in enumerate(criteria):
