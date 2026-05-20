@@ -12,6 +12,7 @@ from source.extract_spaces import extract_spaces_geometric
 from source.fallbacks import fallback_equipment_from_text, fallback_spaces_from_text
 from source.geometry import extract_text
 from source.modules import calculate_certificate_duration, extract_modules
+from source.models import DocumentPayload
 from source.normalization import normalize_document_payload
 from source.schedule import calculate_schedule
 from source.training_section import extract_training_modules
@@ -58,7 +59,7 @@ def build_payload(pdf_path):
     if not equipment_groups:
         equipment_groups = fallback_equipment_from_text(text)
 
-    return normalize_document_payload(
+    normalized_payload = normalize_document_payload(
         data,
         modules,
         spaces,
@@ -66,18 +67,19 @@ def build_payload(pdf_path):
         duration_text,
         training_modules
     )
+    return DocumentPayload.from_dict(normalized_payload)
 
 
 def process_pdf(pdf_path, config):
     base_name = os.path.splitext(os.path.basename(pdf_path))[0]
     payload = build_payload(pdf_path)
     schedule = calculate_schedule(
-        payload["modules"],
+        [module.to_dict() for module in payload.modules],
         config["session_hours"],
         config["start_date"]
     )
 
-    certificate_code = safe_path_name(payload["data"].get("codigo"), base_name)
+    certificate_code = safe_path_name(payload.data.codigo, base_name)
     certificate_output_folder = os.path.join(OUTPUT_FOLDER, certificate_code)
     os.makedirs(certificate_output_folder, exist_ok=True)
 
@@ -91,20 +93,20 @@ def process_pdf(pdf_path, config):
     )
 
     create_info_docx(
-        payload["data"],
-        payload["modules"],
-        payload["spaces"],
-        payload["equipment_groups"],
-        payload["duration_text"],
-        payload["training_modules"],
+        payload.data.to_dict(),
+        [module.to_dict() for module in payload.modules],
+        payload.spaces,
+        [group.to_dict() for group in payload.equipment_groups],
+        payload.duration_text,
+        [module.to_dict() for module in payload.training_modules],
         info_output_path,
         config["teacher_name"]
     )
 
     create_anexo_iii_docx(
-        payload["data"],
-        payload["modules"],
-        payload["duration_text"],
+        payload.data.to_dict(),
+        [module.to_dict() for module in payload.modules],
+        payload.duration_text,
         anexo_output_path,
         schedule,
         config["teacher_name"]
@@ -112,9 +114,9 @@ def process_pdf(pdf_path, config):
 
     generated_files = [info_output_path, anexo_output_path]
 
-    for training_module in payload["training_modules"]:
+    for training_module in payload.training_modules:
         module_code = safe_path_name(
-            training_module.get("identifier", "").split(":", 1)[0],
+            training_module.identifier.split(":", 1)[0],
             "MF"
         )
         anexo_iv_output_path = os.path.join(
@@ -123,15 +125,15 @@ def process_pdf(pdf_path, config):
         )
 
         create_anexo_iv_docx(
-            payload["data"],
-            training_module,
-            payload["duration_text"],
+            payload.data.to_dict(),
+            training_module.to_dict(),
+            payload.duration_text,
             anexo_iv_output_path,
             schedule,
             add_header_footer,
             config["copy_subcriteria"],
-            payload["spaces"],
-            payload["equipment_groups"],
+            payload.spaces,
+            [group.to_dict() for group in payload.equipment_groups],
             config["teacher_name"]
         )
 
