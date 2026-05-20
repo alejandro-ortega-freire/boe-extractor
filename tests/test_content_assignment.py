@@ -3,6 +3,8 @@ import unittest
 from source.content_assignment import assign_contents_to_criteria
 from source.models import Bullet, ContentItem, Criterion
 
+from tests.helpers import MAMD0309_PDF, payload_for, require_pdf
+
 
 class ContentAssignmentTests(unittest.TestCase):
     def test_single_criterion_receives_all_contents(self):
@@ -50,6 +52,28 @@ class ContentAssignmentTests(unittest.TestCase):
         assigned = assign_contents_to_criteria(criteria, contents)
 
         self.assertIsInstance(assigned[0][0], dict)
+
+    def test_real_annex_iv_assignments_do_not_leave_empty_content_cells(self):
+        require_pdf(self, MAMD0309_PDF)
+        payload = payload_for("MAMD0309.pdf")
+
+        checked = 0
+
+        for module in payload.training_modules:
+            units = module.ufs or [module]
+
+            for unit in units:
+                if not unit.criteria or not unit.contents:
+                    continue
+
+                assigned = assign_contents_to_criteria(unit.criteria, unit.contents)
+                checked += 1
+
+                with self.subTest(module=module.code, unit=getattr(unit, "code", module.code)):
+                    self.assertEqual(len(assigned), len(unit.criteria))
+                    self.assertTrue(all(group for group in assigned))
+
+        self.assertGreater(checked, 0)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,8 @@
 import unittest
 
+from source.anexo_iii_writer import title_without_hours
+from source.anexo_iv_writer import module_identifier_without_hours, module_title
+from source.models import TrainingModule
 from source.training_section import is_module_header, is_practice_module_header
 
 from tests.helpers import MAMD0309_PDF, find_training_module, payload_for, require_pdf
@@ -23,6 +26,26 @@ class TrainingSectionTests(unittest.TestCase):
 
         self.assertEqual([uf.code for uf in mf0174.ufs], ["UF1182", "UF1183", "UF1184"])
         self.assertEqual([uf.code for uf in mf0175.ufs], ["UF1185", "UF1186", "UF1187"])
+
+    def test_module_titles_used_in_annexes_do_not_keep_trailing_hours(self):
+        module_text = (
+            "MF0615_3: Proyectos de montaje de instalaciones de energía eólica. "
+            "(120 horas)."
+        )
+        module = TrainingModule(identifier=module_text, hours="120")
+
+        self.assertEqual(
+            title_without_hours(module_text),
+            "MF0615_3: Proyectos de montaje de instalaciones de energía eólica."
+        )
+        self.assertEqual(
+            module_identifier_without_hours(module),
+            "MF0615_3: Proyectos de montaje de instalaciones de energía eólica."
+        )
+        self.assertEqual(
+            module_title(module),
+            "MF0615_3 Proyectos de montaje de instalaciones de energía eólica."
+        )
 
 
 if __name__ == "__main__":
