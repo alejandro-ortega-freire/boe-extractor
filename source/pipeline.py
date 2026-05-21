@@ -77,7 +77,8 @@ def process_pdf(pdf_path, config):
     schedule = calculate_schedule(
         payload.modules,
         config["session_hours"],
-        config["start_date"]
+        config["start_date"],
+        config.get("custom_holidays")
     )
 
     certificate_code = safe_path_name(payload.data.codigo, base_name)

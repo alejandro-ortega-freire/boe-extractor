@@ -30,6 +30,8 @@ $appDir = Join-Path $root "dist\BOEExtractor"
 New-Item -ItemType Directory -Force -Path (Join-Path $appDir "input"), (Join-Path $appDir "output") | Out-Null
 Copy-Item -Path (Join-Path $root "assets") -Destination (Join-Path $appDir "assets") -Recurse -Force
 Copy-Item -Path (Join-Path $root "assets\Instrucciones.png") -Destination (Join-Path $appDir "Instrucciones.png") -Force
+$holidayTemplate = Join-Path $appDir "festivos.xlsx"
+& $python -c "from source.holiday_workbook import write_holiday_template; write_holiday_template(r'$holidayTemplate')"
 attrib +h (Join-Path $appDir "assets")
 
 Write-Host "Distribucion creada en: $appDir"

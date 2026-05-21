@@ -2,11 +2,13 @@ from datetime import date, datetime, timedelta
 import re
 
 from source.settings import (
+    CUSTOM_HOLIDAYS_FILE,
     DEFAULT_SESSION_HOURS,
     DEFAULT_TEACHER_NAME,
     MAX_SESSION_HOURS,
     MIN_SESSION_HOURS,
 )
+from source.holiday_workbook import load_custom_holidays
 
 
 def parse_hours(text):
@@ -37,7 +39,7 @@ def easter_sunday(year):
     return date(year, month, day)
 
 
-def holidays_for_year(year):
+def holidays_for_year(year, custom_holidays=None):
     easter = easter_sunday(year)
     holidays = {
         date(year, 1, 1): "Año Nuevo",
@@ -54,14 +56,22 @@ def holidays_for_year(year):
         date(year, 12, 25): "Natividad del Señor",
         date(year, 2, 2): "Nuestra Señora de la Candelaria (Tenerife)",
     }
+
+    if custom_holidays:
+        holidays.update({
+            day: name
+            for day, name in custom_holidays.items()
+            if day.year == year
+        })
+
     return holidays
 
 
-def holidays_between(start_date, end_date):
+def holidays_between(start_date, end_date, custom_holidays=None):
     holidays = {}
 
     for year in range(start_date.year, end_date.year + 1):
-        holidays.update(holidays_for_year(year))
+        holidays.update(holidays_for_year(year, custom_holidays))
 
     return {
         day: name
@@ -70,28 +80,29 @@ def holidays_between(start_date, end_date):
     }
 
 
-def is_working_day(day):
+def is_working_day(day, custom_holidays=None):
     if day.weekday() >= 5:
         return False
 
-    return day not in holidays_for_year(day.year)
+    return day not in holidays_for_year(day.year, custom_holidays)
 
 
-def next_working_day(day):
-    while not is_working_day(day):
+def next_working_day(day, custom_holidays=None):
+    while not is_working_day(day, custom_holidays):
         day += timedelta(days=1)
 
     return day
 
 
-def default_start_date(today=None):
+def default_start_date(today=None, custom_holidays=None):
     today = today or date.today()
+    custom_holidays = custom_holidays if custom_holidays is not None else load_custom_holidays(CUSTOM_HOLIDAYS_FILE)
     candidate = today + timedelta(days=1)
 
     while candidate.weekday() != 0:
         candidate += timedelta(days=1)
 
-    return next_working_day(candidate)
+    return next_working_day(candidate, custom_holidays)
 
 
 def parse_date(value):
@@ -134,8 +145,9 @@ def prompt_teacher_name():
     return value or DEFAULT_TEACHER_NAME
 
 
-def prompt_start_date():
-    default = default_start_date()
+def prompt_start_date(custom_holidays=None):
+    custom_holidays = custom_holidays if custom_holidays is not None else load_custom_holidays(CUSTOM_HOLIDAYS_FILE)
+    default = default_start_date(custom_holidays=custom_holidays)
     value = input(
         f"Fecha de inicio del certificado "
         f"(dd/mm/aaaa, defecto {format_date(default)}): "
@@ -150,8 +162,8 @@ def prompt_start_date():
         print(f"Fecha no válida. Se usará {format_date(default)}.")
         return default
 
-    if not is_working_day(parsed):
-        adjusted = next_working_day(parsed)
+    if not is_working_day(parsed, custom_holidays):
+        adjusted = next_working_day(parsed, custom_holidays)
         print(
             f"La fecha indicada no es lectiva. "
             f"Se usará {format_date(adjusted)}."
@@ -167,11 +179,14 @@ def prompt_copy_subcriteria():
 
 
 def prompt_schedule_config():
+    custom_holidays = load_custom_holidays(CUSTOM_HOLIDAYS_FILE)
+
     return {
         "teacher_name": prompt_teacher_name(),
         "session_hours": prompt_session_hours(),
-        "start_date": prompt_start_date(),
+        "start_date": prompt_start_date(custom_holidays),
         "copy_subcriteria": prompt_copy_subcriteria(),
+        "custom_holidays": custom_holidays,
     }
 
 
@@ -206,9 +221,12 @@ def iter_scheduled_items(modules):
             yield code_from_text(uf), parse_hours(uf)
 
 
-def calculate_schedule(modules, session_hours, start_date):
+def calculate_schedule(modules, session_hours, start_date, custom_holidays=None):
     """Distribute module/UF hours over working days and carry partial sessions forward."""
-    current_date = next_working_day(start_date)
+    if custom_holidays is None:
+        custom_holidays = load_custom_holidays(CUSTOM_HOLIDAYS_FILE)
+
+    current_date = next_working_day(start_date, custom_holidays)
     used_hours = 0
     dates_by_code = {}
     first_date = current_date
@@ -235,11 +253,11 @@ def calculate_schedule(modules, session_hours, start_date):
                     end_note = consumed
                 else:
                     used_hours = 0
-                    current_date = next_working_day(current_date + timedelta(days=1))
+                    current_date = next_working_day(current_date + timedelta(days=1), custom_holidays)
                 break
 
             used_hours = 0
-            current_date = next_working_day(current_date + timedelta(days=1))
+            current_date = next_working_day(current_date + timedelta(days=1), custom_holidays)
 
         dates_by_code[code] = {
             "start": start,
@@ -250,7 +268,7 @@ def calculate_schedule(modules, session_hours, start_date):
         }
 
     last_date = max((item["end"] for item in dates_by_code.values()), default=first_date)
-    considered_holidays = holidays_between(first_date, last_date)
+    considered_holidays = holidays_between(first_date, last_date, custom_holidays)
 
     return {
         "dates_by_code": dates_by_code,
