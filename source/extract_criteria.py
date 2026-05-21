@@ -5,6 +5,7 @@ from source.cleaning import clean_line, is_boe_noise
 
 
 CONTROL_BULLET_PREFIX = "\x02\x03"
+COLUMN_GAP_THRESHOLD = 32
 
 
 def normalize_ce_code(text):
@@ -12,6 +13,25 @@ def normalize_ce_code(text):
     text = re.sub(r"\bCE\s+(\d+\.\d+)", r"CE\1", text)
     text = re.sub(r"\bCE(\d+)\s+(\d+)\b", r"CE\1.\2", text)
     return text
+
+
+def split_words_by_column_gap(words, gap_threshold=COLUMN_GAP_THRESHOLD):
+    chunks = []
+    current = []
+    previous = None
+
+    for word in sorted(words, key=lambda item: item["x0"]):
+        if previous is not None and word["x0"] - previous["x1"] > gap_threshold:
+            chunks.append(current)
+            current = []
+
+        current.append(word)
+        previous = word
+
+    if current:
+        chunks.append(current)
+
+    return chunks
 
 
 def get_page_lines(page, y_tolerance=3):
@@ -52,18 +72,19 @@ def get_page_lines(page, y_tolerance=3):
     lines = []
 
     for group in grouped:
-        line_words = sorted(group["words"], key=lambda item: item["x0"])
-        text = clean_line(" ".join(item["text"] for item in line_words))
-        text = normalize_ce_code(text)
+        for line_words in split_words_by_column_gap(group["words"]):
+            line_words = sorted(line_words, key=lambda item: item["x0"])
+            text = clean_line(" ".join(item["text"] for item in line_words))
+            text = normalize_ce_code(text)
 
-        if not text or is_boe_noise(text):
-            continue
+            if not text or is_boe_noise(text):
+                continue
 
-        lines.append({
-            "text": text,
-            "x0": min(item["x0"] for item in line_words),
-            "y0": min(item["y0"] for item in line_words),
-        })
+            lines.append({
+                "text": text,
+                "x0": min(item["x0"] for item in line_words),
+                "y0": min(item["y0"] for item in line_words),
+            })
 
     return sorted(lines, key=lambda item: (item["y0"], item["x0"]))
 
@@ -135,7 +156,7 @@ def is_criteria_title(text):
 
 
 def is_contents_title(text):
-    return text.startswith("Contenidos")
+    return bool(re.fullmatch(r"Contenidos:?", text, flags=re.IGNORECASE))
 
 
 def is_criterion_start(text):

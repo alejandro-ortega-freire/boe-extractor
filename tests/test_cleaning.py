@@ -30,6 +30,25 @@ class CleaningTests(unittest.TestCase):
             "Texto válido"
         )
 
+    def test_removes_old_boe_footer_when_embedded_in_line(self):
+        self.assertEqual(
+            clean_line(
+                "CE3.4 Seleccionar máquinas electro-portátiles. BOE núm. 307 Lunes 22 diciembre 2008 51503"
+            ),
+            "CE3.4 Seleccionar máquinas electro-portátiles."
+        )
+
+    def test_removes_old_boe_header_when_embedded_in_line(self):
+        self.assertEqual(
+            clean_line(
+                "CE2.3 Otros datos necesarios. 51502 Lunes 22 diciembre 2008 BOE núm. 307"
+            ),
+            "CE2.3 Otros datos necesarios."
+        )
+
+    def test_discards_old_boe_date_fragment_as_space_name(self):
+        self.assertEqual(clean_space_name("Lunes diciembre"), "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,7 +1,7 @@
 import re
 import fitz
 
-from source.cleaning import clean_line, dedupe_list, clean_dot_leaders
+from source.cleaning import clean_line, dedupe_list, clean_dot_leaders, MONTH_PATTERN, WEEKDAY_PATTERN
 from source.geometry import (
     find_pages_with_requirements,
     get_geometric_table_candidates,
@@ -16,6 +16,10 @@ def clean_space_name(name):
     name = clean_line(name)
     name = clean_dot_leaders(name)
     name = re.sub(r"\s*\.\s*$", "", name)
+
+    if re.fullmatch(rf"{WEEKDAY_PATTERN}\s+{MONTH_PATTERN}", name, flags=re.IGNORECASE):
+        return ""
+
     return name
 
 

@@ -1,7 +1,7 @@
-import re
 import fitz
+import re
 
-from source.cleaning import clean_line
+from source.cleaning import clean_line, is_boe_noise
 from source.extract_criteria import (
     extract_mf_code,
     extract_uf_code,
@@ -16,7 +16,7 @@ CONTROL_BULLET_PREFIX = "\x02\x03"
 
 
 def is_contents_title(text):
-    return text.startswith("Contenidos")
+    return bool(re.fullmatch(r"Contenidos:?", text, flags=re.IGNORECASE))
 
 
 def is_contents_stop_line(text):
@@ -269,6 +269,213 @@ def parse_content_line(line, target, state):
     return state
 
 
+def reset_text_content_state():
+    state = reset_content_state()
+    state["pending_bullet"] = False
+    return state
+
+
+def append_textual_continuation(state, text):
+    if state["bullet_stack"]:
+        append_text_to_bullet(state["bullet_stack"][-1]["bullet"], text)
+        return
+
+    if state["current_content"] is not None:
+        state["current_content"]["title"] = clean_line(
+            state["current_content"]["title"] + " " + text
+        )
+
+
+def parse_text_content_line(text, target, state):
+    text = clean_line(text)
+
+    if not text:
+        return state
+
+    if text == "-":
+        state["pending_bullet"] = True
+        return state
+
+    bullet_match = get_bullet_match(text)
+    if bullet_match and state["current_content"] is not None:
+        bullet_text = bullet_match.group(2).strip()
+
+        if bullet_text:
+            bullet = new_bullet(bullet_text)
+            state["current_content"]["bullets"].append(bullet)
+            state["bullet_stack"] = [{
+                "x0": 0,
+                "bullet": bullet
+            }]
+            state["pending_bullet"] = False
+
+        return state
+
+    heading_match = get_content_heading_match(text)
+    if heading_match:
+        text = f"{heading_match.group(1)}. {heading_match.group(2)}"
+        content = new_content_item(text)
+        target.append(content)
+
+        state = reset_text_content_state()
+        state["current_content"] = content
+        state["current_content_x0"] = 0
+        return state
+
+    if state["current_content"] is None:
+        return state
+
+    if state["pending_bullet"]:
+        bullet = new_bullet(text)
+        state["current_content"]["bullets"].append(bullet)
+        state["bullet_stack"] = [{
+            "x0": 0,
+            "bullet": bullet
+        }]
+        state["pending_bullet"] = False
+        return state
+
+    append_textual_continuation(state, text)
+    return state
+
+
+def raw_content_lines(page):
+    for raw_line in page.get_text("text").splitlines():
+        line = clean_line(raw_line)
+
+        if not line or is_boe_noise(line):
+            continue
+
+        if re.fullmatch(r"\d{4,6}", line):
+            continue
+
+        yield line
+
+
+def has_any_contents(module_data):
+    if module_data.get("contents"):
+        return True
+
+    return any(uf.get("contents") for uf in module_data.get("ufs", []))
+
+
+def merge_missing_contents(primary, fallback):
+    for module_code, fallback_module in fallback.items():
+        primary_module = primary.setdefault(module_code, {
+            "contents": [],
+            "ufs": []
+        })
+
+        if not primary_module.get("contents") and fallback_module.get("contents"):
+            primary_module["contents"] = fallback_module["contents"]
+
+        primary_ufs = primary_module.setdefault("ufs", [])
+
+        for fallback_uf in fallback_module.get("ufs", []):
+            uf_code = fallback_uf.get("code", "")
+            primary_uf = next(
+                (uf for uf in primary_ufs if uf.get("code") == uf_code),
+                None
+            )
+
+            if primary_uf is None:
+                primary_ufs.append(fallback_uf)
+            elif not primary_uf.get("contents") and fallback_uf.get("contents"):
+                primary_uf["contents"] = fallback_uf["contents"]
+
+    return primary
+
+
+def extract_contents_textual(pdf_path):
+    doc = fitz.open(pdf_path)
+
+    result = {}
+    in_training_section = False
+    in_contents = False
+
+    current_module = None
+    current_uf = None
+    state = reset_text_content_state()
+
+    for page in doc:
+        for text in raw_content_lines(page):
+            if "FORMACIÓN DEL CERTIFICADO DE PROFESIONALIDAD" in text:
+                in_training_section = True
+                continue
+
+            if not in_training_section:
+                continue
+
+            if text.startswith("IV. PRESCRIPCIONES"):
+                return result
+
+            if is_practice_module_header(text):
+                return result
+
+            if is_module_header(text):
+                in_contents = False
+                current_module = {
+                    "code": "",
+                    "contents": []
+                }
+                current_uf = None
+                state = reset_text_content_state()
+                continue
+
+            if is_uf_header(text):
+                in_contents = False
+                current_uf = {
+                    "code": "",
+                    "contents": []
+                }
+                state = reset_text_content_state()
+                continue
+
+            if text.startswith("Código:"):
+                code = text.replace("Código:", "", 1).strip()
+                mf_code = extract_mf_code(code)
+                uf_code = extract_uf_code(code)
+
+                if current_uf is not None and uf_code:
+                    current_uf["code"] = uf_code
+                    ensure_module(result, current_module)
+
+                    module_data = result[current_module["code"]]
+                    if not any(uf["code"] == uf_code for uf in module_data["ufs"]):
+                        module_data["ufs"].append({
+                            "code": uf_code,
+                            "contents": []
+                        })
+
+                elif current_module is not None and mf_code:
+                    current_module["code"] = mf_code
+                    ensure_module(result, current_module)
+
+                continue
+
+            if is_contents_title(text):
+                in_contents = True
+                state = reset_text_content_state()
+                continue
+
+            if is_contents_stop_line(text):
+                in_contents = False
+                state = reset_text_content_state()
+                continue
+
+            if not in_contents:
+                continue
+
+            target = get_current_target(result, current_module, current_uf)
+
+            if target is None:
+                continue
+
+            state = parse_text_content_line(text, target, state)
+
+    return result
+
+
 def extract_contents_geometric(pdf_path):
     """
     Extrae contenidos numerados recorriendo la sección formativa página a página.
@@ -366,7 +573,8 @@ def extract_contents_geometric(pdf_path):
 
             state = parse_content_line(line, target, state)
 
-    return result
+    fallback = extract_contents_textual(pdf_path)
+    return merge_missing_contents(result, fallback)
 
 
 def merge_geometric_contents(training_modules, contents_by_module):

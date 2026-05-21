@@ -1,15 +1,38 @@
 import re
 
 
+WEEKDAY_PATTERN = r"(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)"
+MONTH_PATTERN = r"(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
+
+
+def strip_boe_inline_noise(text):
+    text = str(text or "")
+    old_boe_date = rf"{WEEKDAY_PATTERN}\s+\d{{1,2}}\s+{MONTH_PATTERN}\s+\d{{4}}"
+    patterns = [
+        rf"\b\d{{4,6}}\s+{old_boe_date}\s+BOE\s+n[úu]m\.?\s*\d+\b",
+        rf"\bBOE\s+n[úu]m\.?\s*\d+\s+{old_boe_date}\s+\d{{4,6}}\b",
+        rf"\b{old_boe_date}\b",
+        r"\bBOE\s+n[úu]m\.?\s*\d+\b",
+    ]
+
+    for pattern in patterns:
+        text = re.sub(pattern, " ", text, flags=re.IGNORECASE)
+
+    return text
+
+
 def is_boe_noise(line):
     patterns = [
         r"BOLETÍN OFICIAL DEL ESTADO",
+        r"^BOE\s+n[úu]m\.?\s*\d+",
         r"^Núm\.?\s*\d+",
         r"^Sec\.?\s*[IVXLC]+\b",
         r"Pág\.?\s*\d+",
         r"cve:",
         r"BOE-A-\d{4}-\d+",
         r"\d{1,2}\s+de\s+[a-záéíóúñ]+\s+de\s+\d{4}",
+        rf"^\d{{4,6}}\s+{WEEKDAY_PATTERN}\s+\d{{1,2}}\s+{MONTH_PATTERN}\s+\d{{4}}\s+BOE\s+n[úu]m\.?\s*\d+$",
+        rf"^BOE\s+n[úu]m\.?\s*\d+\s+{WEEKDAY_PATTERN}\s+\d{{1,2}}\s+{MONTH_PATTERN}\s+\d{{4}}\s+\d{{4,6}}$",
     ]
     return any(re.search(p, str(line), re.IGNORECASE) for p in patterns)
 
@@ -33,6 +56,7 @@ def clean_line(line):
     )
 
     line = re.sub(r"BOE-A-\d{4}-\d+", "", line)
+    line = strip_boe_inline_noise(line)
 
     # Elimina puntos decorativos largos, pero conserva CE1.2, 1.1, decimales, etc.
     line = re.sub(r"\.{3,}", " ", line)
