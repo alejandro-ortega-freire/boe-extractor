@@ -17,4 +17,5 @@ MIN_SESSION_HOURS = 1
 MAX_SESSION_HOURS = 8
 
 LOGO_PATH = os.path.join("assets", "boe_extractor_logo.png")
+CUSTOM_HOLIDAYS_FILE = "festivos.xlsx"
 DEFAULT_AUTHOR = __author__
