@@ -600,6 +600,7 @@ def create_anexo_v_docx(
     spaces=None,
     add_header_footer=None,
     teacher_name=DEFAULT_TEACHER_NAME,
+    training_center=None,
 ):
     doc = Document()
     configure_page(doc.sections[0])
@@ -617,6 +618,7 @@ def create_anexo_v_docx(
         annex_label="ANEXO V",
         document_title="Planificación de la evaluación del aprendizaje",
         module_section_title="PLANIFICACIÓN DE LA EVALUACIÓN DEL APRENDIZAJE",
+        training_center=training_center,
     )
     add_anexo_v_table(doc, module, schedule, spaces)
     add_anexo_v_notes(doc)

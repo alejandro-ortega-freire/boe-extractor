@@ -2,11 +2,19 @@ from datetime import date, datetime, timedelta
 import re
 
 from source.settings import (
+    ACTION_CODE,
     CUSTOM_HOLIDAYS_FILE,
     DEFAULT_SESSION_HOURS,
+    DEFAULT_STUDENT_COUNT,
     DEFAULT_TEACHER_NAME,
+    MAX_STUDENT_COUNT,
     MAX_SESSION_HOURS,
+    MIN_STUDENT_COUNT,
     MIN_SESSION_HOURS,
+    PLACEHOLDER_ADDRESS,
+    PLACEHOLDER_CENTER,
+    PLACEHOLDER_LOCALITY,
+    PROVINCE,
 )
 from source.holiday_workbook import load_custom_holidays
 
@@ -145,6 +153,66 @@ def prompt_teacher_name():
     return value or DEFAULT_TEACHER_NAME
 
 
+def prompt_student_count():
+    value = input(f"¿Número de alumnos? (defecto {DEFAULT_STUDENT_COUNT}): ").strip()
+
+    if not value:
+        return DEFAULT_STUDENT_COUNT
+
+    try:
+        count = int(value)
+    except ValueError:
+        print(f"Valor no válido. Se usará {DEFAULT_STUDENT_COUNT}.")
+        return DEFAULT_STUDENT_COUNT
+
+    if MIN_STUDENT_COUNT <= count <= MAX_STUDENT_COUNT:
+        return count
+
+    print(f"Valor fuera de rango. Se usará {DEFAULT_STUDENT_COUNT}.")
+    return DEFAULT_STUDENT_COUNT
+
+
+def default_training_center():
+    return {
+        "course_number": ACTION_CODE,
+        "center": PLACEHOLDER_CENTER,
+        "address": PLACEHOLDER_ADDRESS,
+        "locality": PLACEHOLDER_LOCALITY,
+        "province": PROVINCE,
+    }
+
+
+def prompt_yes_no(question, default=False):
+    default_text = "y" if default else "n"
+    value = input(f"{question} (y/n, defecto {default_text}): ").strip().lower()
+
+    if not value:
+        return default
+
+    return value in ("y", "yes", "s", "si", "sí")
+
+
+def prompt_training_center():
+    center = default_training_center()
+
+    if not prompt_yes_no("¿Quiere introducir los datos del Centro de Formación?", default=False):
+        return center
+
+    values = {
+        "course_number": input(f"¿Número del Curso? (defecto {ACTION_CODE}): ").strip(),
+        "center": input("¿Nombre del Centro de Formación? ").strip(),
+        "address": input("¿Dirección del Centro de Formación? ").strip(),
+        "locality": input("¿Localidad? ").strip(),
+        "province": input(f"¿Provincia? (defecto {PROVINCE}): ").strip(),
+    }
+
+    for key, value in values.items():
+        if value:
+            center[key] = value
+
+    return center
+
+
 def prompt_start_date(custom_holidays=None):
     custom_holidays = custom_holidays if custom_holidays is not None else load_custom_holidays(CUSTOM_HOLIDAYS_FILE)
     default = default_start_date(custom_holidays=custom_holidays)
@@ -187,6 +255,8 @@ def prompt_schedule_config():
 
     return {
         "teacher_name": prompt_teacher_name(),
+        "student_count": prompt_student_count(),
+        "training_center": prompt_training_center(),
         "session_hours": prompt_session_hours(),
         "start_date": prompt_start_date(custom_holidays),
         "copy_subcriteria": prompt_copy_subcriteria(),

@@ -138,6 +138,18 @@ def schedule_date_range(schedule):
     return format_date_range(start, end)
 
 
+def training_center_data(training_center=None):
+    training_center = training_center or {}
+
+    return {
+        "course_number": training_center.get("course_number") or ACTION_CODE,
+        "center": training_center.get("center") or PLACEHOLDER_CENTER,
+        "address": training_center.get("address") or PLACEHOLDER_ADDRESS,
+        "locality": training_center.get("locality") or PLACEHOLDER_LOCALITY,
+        "province": training_center.get("province") or PROVINCE,
+    }
+
+
 def add_anexo_header(
     doc,
     data,
@@ -145,14 +157,16 @@ def add_anexo_header(
     schedule=None,
     annex_label="ANEXO III",
     document_title="Planificación didáctica",
+    training_center=None,
 ):
     add_centered_heading(doc, annex_label)
     add_centered_heading(doc, document_title)
     add_centered_heading(doc, "(Modalidad presencial)")
     doc.add_paragraph("")
+    center = training_center_data(training_center)
 
     certificate = (
-        f"{ACTION_CODE} {data.codigo} "
+        f"{center['course_number']} {data.codigo} "
         f"{data.nombre.upper()}"
     ).strip()
 
@@ -164,12 +178,12 @@ def add_anexo_header(
         ("FECHAS DE IMPARTICIÓN: ", schedule_date_range(schedule)),
     ])
     add_tabbed_label_line(doc, [
-        ("CENTRO DE FORMACIÓN: ", PLACEHOLDER_CENTER),
+        ("CENTRO DE FORMACIÓN: ", center["center"]),
     ])
     add_tabbed_label_line(doc, [
-        ("DIRECCIÓN: ", PLACEHOLDER_ADDRESS),
-        ("LOCALIDAD: ", PLACEHOLDER_LOCALITY),
-        ("PROVINCIA: ", PROVINCE),
+        ("DIRECCIÓN: ", center["address"]),
+        ("LOCALIDAD: ", center["locality"]),
+        ("PROVINCIA: ", center["province"]),
     ])
 
 
@@ -355,11 +369,11 @@ def configure_anexo_section(section):
     section.right_margin = Inches(0.45)
 
 
-def add_anexo_iii(doc, data, modules, duration_text, schedule=None, new_page=True):
+def add_anexo_iii(doc, data, modules, duration_text, schedule=None, new_page=True, training_center=None):
     section = doc.add_section(WD_SECTION.NEW_PAGE) if new_page else doc.sections[0]
     configure_anexo_section(section)
 
-    add_anexo_header(doc, data, duration_text, schedule)
+    add_anexo_header(doc, data, duration_text, schedule, training_center=training_center)
     add_planning_table(doc, modules, schedule)
     add_practice_table(doc, modules, schedule)
     add_holiday_note(doc, schedule)

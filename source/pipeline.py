@@ -76,6 +76,7 @@ def build_payload(pdf_path):
 def process_pdf(pdf_path, config):
     base_name = os.path.splitext(os.path.basename(pdf_path))[0]
     payload = build_payload(pdf_path)
+    training_center = config.get("training_center")
     schedule = calculate_schedule(
         payload.modules,
         config["session_hours"],
@@ -125,7 +126,8 @@ def process_pdf(pdf_path, config):
         payload.duration_text,
         anexo_output_path,
         schedule,
-        config["teacher_name"]
+        config["teacher_name"],
+        training_center
     )
 
     create_anexo_vi_docx(
@@ -134,7 +136,8 @@ def process_pdf(pdf_path, config):
         payload.duration_text,
         anexo_vi_output_path,
         schedule,
-        config["teacher_name"]
+        config["teacher_name"],
+        training_center
     )
 
     generated_files = [info_output_path, anexo_output_path, anexo_vi_output_path]
@@ -163,7 +166,8 @@ def process_pdf(pdf_path, config):
             config["copy_subcriteria"],
             payload.spaces,
             payload.equipment_groups,
-            config["teacher_name"]
+            config["teacher_name"],
+            training_center
         )
 
         generated_files.append(anexo_iv_output_path)
@@ -176,7 +180,8 @@ def process_pdf(pdf_path, config):
             schedule,
             payload.spaces,
             add_header_footer,
-            config["teacher_name"]
+            config["teacher_name"],
+            training_center
         )
 
         generated_files.append(anexo_v_output_path)

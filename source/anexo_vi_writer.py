@@ -375,6 +375,7 @@ def create_anexo_vi_docx(
     output_path,
     schedule=None,
     teacher_name=DEFAULT_TEACHER_NAME,
+    training_center=None,
 ):
     doc = Document()
 
@@ -390,6 +391,7 @@ def create_anexo_vi_docx(
         schedule,
         annex_label="ANEXO VI",
         document_title="Informe de Evaluación Individualizado",
+        training_center=training_center,
     )
     add_anexo_vi_table(doc, modules, schedule)
 

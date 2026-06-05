@@ -27,6 +27,13 @@ class AnexoVIWriterTests(unittest.TestCase):
                 output_path,
                 schedule={},
                 teacher_name="Docente",
+                training_center={
+                    "course_number": "99-99/999999",
+                    "center": "Centro Personalizado",
+                    "address": "Calle Nueva 1",
+                    "locality": "La Laguna",
+                    "province": "Las Palmas",
+                },
             )
 
             doc = Document(output_path)
@@ -36,6 +43,11 @@ class AnexoVIWriterTests(unittest.TestCase):
         self.assertIn("ANEXO VI", text)
         self.assertIn("Informe de Evaluación Individualizado", text)
         self.assertIn("INFORME DE EVALUACIÓN INDIVIDUALIZADO", text)
+        self.assertIn("99-99/999999", text)
+        self.assertIn("Centro Personalizado", text)
+        self.assertIn("Calle Nueva 1", text)
+        self.assertIn("La Laguna", text)
+        self.assertIn("Las Palmas", text)
         self.assertNotIn("ANEXO III", text)
         self.assertNotIn("Planificación didáctica", text)
         self.assertNotIn("PLANIFICACIÓN DIDÁCTICA DEL CURSO COMPLETO", text)

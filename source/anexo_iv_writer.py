@@ -8,6 +8,7 @@ import re
 from source.anexo_iii_writer import (
     duration_for_anexo,
     schedule_date_range,
+    training_center_data,
 )
 from source.content_assignment import assign_contents_to_criteria
 from source.docx_styles import (
@@ -24,12 +25,7 @@ from source.docx_utils import add_horizontal_rule
 from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
 from source.settings import (
-    ACTION_CODE,
     DEFAULT_TEACHER_NAME,
-    PLACEHOLDER_ADDRESS,
-    PLACEHOLDER_CENTER,
-    PLACEHOLDER_LOCALITY,
-    PROVINCE,
 )
 from source.table_styles import (
     apply_vertical_borders,
@@ -339,6 +335,7 @@ def add_module_header(
     annex_label="ANEXO IV",
     document_title="Programación didáctica",
     module_section_title="PROGRAMACIÓN DIDÁCTICA DEL MÓDULO PROFESIONAL",
+    training_center=None,
 ):
     add_heading(doc, f"{annex_label} - {module_title(module)}", size=12, space_after=8)
     add_heading(doc, document_title, size=12, space_after=4)
@@ -359,13 +356,14 @@ def add_module_header(
         ],
         tab_stops=[Inches(3.8)],
     )
-    add_tabbed_line(doc, [("CENTRO DE FORMACIÓN: ", PLACEHOLDER_CENTER)])
-    add_tabbed_line(doc, [("DIRECCIÓN: ", PLACEHOLDER_ADDRESS)])
+    center = training_center_data(training_center)
+    add_tabbed_line(doc, [("CENTRO DE FORMACIÓN: ", center["center"])])
+    add_tabbed_line(doc, [("DIRECCIÓN: ", center["address"])])
     add_tabbed_line(
         doc,
         [
-            ("LOCALIDAD: ", PLACEHOLDER_LOCALITY),
-            ("PROVINCIA: ", PROVINCE),
+            ("LOCALIDAD: ", center["locality"]),
+            ("PROVINCIA: ", center["province"]),
         ],
         tab_stops=[Inches(3.8)],
     )
@@ -384,7 +382,7 @@ def add_module_header(
         ],
         tab_stops=[Inches(1.2)],
     )
-    add_tabbed_line(doc, [("Nº DE CURSO: ", ACTION_CODE)])
+    add_tabbed_line(doc, [("Nº DE CURSO: ", center["course_number"])])
     add_tabbed_line(doc, [("Objetivo general del módulo: ", module.objective)])
 
 
@@ -514,7 +512,8 @@ def create_anexo_iv_docx(
     copy_subcriteria=False,
     spaces=None,
     equipment_groups=None,
-    teacher_name=DEFAULT_TEACHER_NAME
+    teacher_name=DEFAULT_TEACHER_NAME,
+    training_center=None,
 ):
     doc = Document()
     configure_page(doc.sections[0])
@@ -523,7 +522,7 @@ def create_anexo_iv_docx(
     normal.font.name = "Calibri"
     normal.font.size = Pt(ANEXO_IV_FONT_SIZE)
 
-    add_module_header(doc, data, module, duration_text, schedule)
+    add_module_header(doc, data, module, duration_text, schedule, training_center=training_center)
     add_anexo_iv_table(doc, module, schedule, copy_subcriteria, spaces, equipment_groups)
 
     if add_header_footer is None:

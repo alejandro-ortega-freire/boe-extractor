@@ -13,8 +13,11 @@ from source.holiday_workbook import (
 from source.schedule import (
     calculate_schedule,
     default_start_date,
+    default_training_center,
     format_holiday_note,
     prompt_copy_subcriteria,
+    prompt_student_count,
+    prompt_training_center,
 )
 
 
@@ -80,6 +83,43 @@ class ScheduleTests(unittest.TestCase):
     def test_copy_subcriteria_accepts_no(self):
         with patch("builtins.input", return_value="n"):
             self.assertFalse(prompt_copy_subcriteria())
+
+    def test_student_count_defaults_to_twenty(self):
+        with patch("builtins.input", return_value=""):
+            self.assertEqual(prompt_student_count(), 20)
+
+    def test_student_count_accepts_value_in_range(self):
+        with patch("builtins.input", return_value="24"):
+            self.assertEqual(prompt_student_count(), 24)
+
+    def test_student_count_rejects_out_of_range_value(self):
+        with patch("builtins.input", return_value="101"):
+            self.assertEqual(prompt_student_count(), 20)
+
+    def test_training_center_defaults_when_not_requested(self):
+        with patch("builtins.input", return_value=""):
+            self.assertEqual(prompt_training_center(), default_training_center())
+
+    def test_training_center_keeps_defaults_for_blank_fields(self):
+        with patch(
+            "builtins.input",
+            side_effect=[
+                "y",
+                "",
+                "Centro Nuevo",
+                "",
+                "La Laguna",
+                "",
+            ],
+        ):
+            center = prompt_training_center()
+
+        defaults = default_training_center()
+        self.assertEqual(center["course_number"], defaults["course_number"])
+        self.assertEqual(center["center"], "Centro Nuevo")
+        self.assertEqual(center["address"], defaults["address"])
+        self.assertEqual(center["locality"], "La Laguna")
+        self.assertEqual(center["province"], defaults["province"])
 
 
 if __name__ == "__main__":

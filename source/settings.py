@@ -15,6 +15,9 @@ PROVINCE = "Santa Cruz de Tenerife"
 DEFAULT_SESSION_HOURS = 6
 MIN_SESSION_HOURS = 1
 MAX_SESSION_HOURS = 8
+DEFAULT_STUDENT_COUNT = 20
+MIN_STUDENT_COUNT = 1
+MAX_STUDENT_COUNT = 100
 
 LOGO_PATH = os.path.join("assets", "boe_extractor_logo.png")
 CUSTOM_HOLIDAYS_FILE = "festivos.xlsx"

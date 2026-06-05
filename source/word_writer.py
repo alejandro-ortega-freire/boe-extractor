@@ -233,7 +233,8 @@ def create_anexo_iii_docx(
     duration_text,
     output_path,
     schedule=None,
-    teacher_name=DEFAULT_TEACHER_NAME
+    teacher_name=DEFAULT_TEACHER_NAME,
+    training_center=None,
 ):
     doc = Document()
 
@@ -241,7 +242,7 @@ def create_anexo_iii_docx(
     normal.font.name = "Calibri"
     normal.font.size = Pt(10)
 
-    add_anexo_iii(doc, data, modules, duration_text, schedule, new_page=False)
+    add_anexo_iii(doc, data, modules, duration_text, schedule, new_page=False, training_center=training_center)
     add_header_footer(doc, teacher_name)
 
     doc.save(output_path)
