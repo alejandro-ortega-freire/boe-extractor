@@ -1,5 +1,7 @@
 import unittest
 
+from source.extract_contents import parse_content_line, reset_content_state
+
 from tests.helpers import (
     MAMD0309_PDF,
     find_training_module,
@@ -11,6 +13,45 @@ from tests.helpers import (
 
 
 class ExtractContentsTests(unittest.TestCase):
+    def test_semicolon_inline_subitems_keep_content_hierarchy(self):
+        target = []
+        state = reset_content_state()
+
+        lines = [
+            {
+                "text": "1. Aplicaciones de tratamiento de imágenes en proyectos de construcción.",
+                "x0": 117.2,
+            },
+            {
+                "text": "- Gestión de formatos de importación y exportación.",
+                "x0": 134.6,
+            },
+            {
+                "text": "- Estructura de dibujos: píxeles, entidades, sólidos, bloques, objetos, capas;",
+                "x0": 134.6,
+            },
+            {
+                "text": "gestión de capas; gestión de versiones; historial.",
+                "x0": 152.6,
+            },
+        ]
+
+        for line in lines:
+            state = parse_content_line(line, target, state)
+
+        structure = target[0]["bullets"][1]
+
+        self.assertEqual(structure["text"], "Estructura de dibujos:")
+        self.assertEqual(
+            [child["text"] for child in structure["children"]],
+            [
+                "píxeles, entidades, sólidos, bloques, objetos, capas.",
+                "gestión de capas.",
+                "gestión de versiones.",
+                "historial.",
+            ],
+        )
+
     def test_mamd0309_uf1185_uf1186_uf1187_have_contents(self):
         require_pdf(self, MAMD0309_PDF)
         payload = payload_for("MAMD0309.pdf")

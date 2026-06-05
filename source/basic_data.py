@@ -1,7 +1,9 @@
 def get_value_after_label(lines, label):
+    normalized_label = label.lower()
+
     for i, line in enumerate(lines):
-        if line.startswith(label):
-            value = line.replace(label, "").strip()
+        if line.lower().startswith(normalized_label):
+            value = line[len(label):].strip()
 
             if value:
                 return value

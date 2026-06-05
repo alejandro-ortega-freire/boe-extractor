@@ -165,17 +165,109 @@ def append_to_last_text(state, text, x0):
         )
 
 
-def add_bullet_by_indent(state, text, x0):
-    bullet = new_bullet(text)
-    stack = state["bullet_stack"]
+def ensure_terminal_period(text):
+    text = clean_line(text)
 
-    while stack and x0 <= stack[-1]["x0"] + 4:
-        stack.pop()
+    if text and text[-1] not in ".:;?!)":
+        return text + "."
+
+    return text
+
+
+def split_semicolon_items(text, min_items=2):
+    if text.count(";") < 1:
+        return []
+
+    items = [
+        ensure_terminal_period(item.strip())
+        for item in text.split(";")
+        if item.strip()
+    ]
+
+    if len(items) < min_items:
+        return []
+
+    return items
+
+
+def split_inline_child_list(text):
+    if ":" not in text:
+        return None
+
+    parent_text, child_text = text.split(":", 1)
+
+    if not parent_text.strip() or not child_text.strip():
+        return None
+
+    children = split_semicolon_items(child_text, min_items=1)
+
+    if not children:
+        return None
+
+    return clean_line(parent_text + ":"), children
+
+
+def append_bullet_to_current_parent(state, bullet):
+    stack = state["bullet_stack"]
 
     if stack:
         stack[-1]["bullet"]["children"].append(bullet)
     else:
         state["current_content"]["bullets"].append(bullet)
+
+
+def add_bullet_by_indent(state, text, x0):
+    stack = state["bullet_stack"]
+
+    while stack and x0 <= stack[-1]["x0"] + 4:
+        stack.pop()
+
+    inline_child_list = split_inline_child_list(text)
+
+    if inline_child_list:
+        parent_text, children = inline_child_list
+        bullet = new_bullet(parent_text)
+        append_bullet_to_current_parent(state, bullet)
+
+        child_x0 = x0 + 18
+        last_child = None
+
+        for child_text in children:
+            last_child = new_bullet(child_text)
+            bullet["children"].append(last_child)
+
+        stack.append({
+            "x0": x0,
+            "bullet": bullet
+        })
+
+        if last_child is not None:
+            stack.append({
+                "x0": child_x0,
+                "bullet": last_child
+            })
+
+        return
+
+    semicolon_items = split_semicolon_items(text)
+
+    if semicolon_items and stack:
+        last_bullet = None
+
+        for item in semicolon_items:
+            last_bullet = new_bullet(item)
+            stack[-1]["bullet"]["children"].append(last_bullet)
+
+        if last_bullet is not None:
+            stack.append({
+                "x0": x0,
+                "bullet": last_bullet
+            })
+
+        return
+
+    bullet = new_bullet(text)
+    append_bullet_to_current_parent(state, bullet)
 
     stack.append({
         "x0": x0,
