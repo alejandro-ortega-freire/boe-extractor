@@ -2,6 +2,7 @@ import unittest
 from datetime import date
 from tempfile import TemporaryDirectory
 from pathlib import Path
+from unittest.mock import patch
 
 from source.models import SummaryModule
 from source.holiday_workbook import (
@@ -9,7 +10,12 @@ from source.holiday_workbook import (
     load_custom_holidays,
     write_holiday_template,
 )
-from source.schedule import calculate_schedule, default_start_date, format_holiday_note
+from source.schedule import (
+    calculate_schedule,
+    default_start_date,
+    format_holiday_note,
+    prompt_copy_subcriteria,
+)
 
 
 class ScheduleTests(unittest.TestCase):
@@ -66,6 +72,14 @@ class ScheduleTests(unittest.TestCase):
             "26/05/2026 (Festivo personalizado)",
             format_holiday_note(schedule)
         )
+
+    def test_copy_subcriteria_defaults_to_yes(self):
+        with patch("builtins.input", return_value=""):
+            self.assertTrue(prompt_copy_subcriteria())
+
+    def test_copy_subcriteria_accepts_no(self):
+        with patch("builtins.input", return_value="n"):
+            self.assertFalse(prompt_copy_subcriteria())
 
 
 if __name__ == "__main__":

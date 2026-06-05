@@ -138,9 +138,16 @@ def schedule_date_range(schedule):
     return format_date_range(start, end)
 
 
-def add_anexo_header(doc, data, duration_text, schedule=None):
-    add_centered_heading(doc, "ANEXO III")
-    add_centered_heading(doc, "Planificación didáctica")
+def add_anexo_header(
+    doc,
+    data,
+    duration_text,
+    schedule=None,
+    annex_label="ANEXO III",
+    document_title="Planificación didáctica",
+):
+    add_centered_heading(doc, annex_label)
+    add_centered_heading(doc, document_title)
     add_centered_heading(doc, "(Modalidad presencial)")
     doc.add_paragraph("")
 
@@ -202,14 +209,19 @@ def module_rows(module, schedule=None):
     return rows
 
 
-def add_planning_table(doc, modules, schedule=None):
+def add_planning_table(
+    doc,
+    modules,
+    schedule=None,
+    title_text="PLANIFICACIÓN DIDÁCTICA DEL CURSO COMPLETO",
+):
     doc.add_paragraph("")
 
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title.paragraph_format.space_before = Pt(8)
     title.paragraph_format.space_after = Pt(4)
-    run = title.add_run("PLANIFICACIÓN DIDÁCTICA DEL CURSO COMPLETO")
+    run = title.add_run(title_text)
     run.bold = True
     run.font.size = Pt(ANEXO_FONT_SIZE)
 

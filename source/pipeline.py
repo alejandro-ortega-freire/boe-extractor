@@ -2,6 +2,7 @@ import os
 
 from source.anexo_iv_writer import build_module_filename, create_anexo_iv_docx
 from source.anexo_v_writer import build_anexo_v_filename, create_anexo_v_docx
+from source.anexo_vi_writer import create_anexo_vi_docx
 from source.basic_data import extract_basic_data
 from source.cleaning import clean_text
 from source.config import OUTPUT_FOLDER
@@ -87,10 +88,12 @@ def process_pdf(pdf_path, config):
     anexo_iii_folder = os.path.join(certificate_output_folder, "Anexo III")
     anexo_iv_folder = os.path.join(certificate_output_folder, "Anexos IV")
     anexo_v_folder = os.path.join(certificate_output_folder, "Anexos V")
+    anexo_vi_folder = os.path.join(certificate_output_folder, "Anexo VI")
     os.makedirs(certificate_output_folder, exist_ok=True)
     os.makedirs(anexo_iii_folder, exist_ok=True)
     os.makedirs(anexo_iv_folder, exist_ok=True)
     os.makedirs(anexo_v_folder, exist_ok=True)
+    os.makedirs(anexo_vi_folder, exist_ok=True)
 
     info_output_path = os.path.join(
         certificate_output_folder,
@@ -99,6 +102,10 @@ def process_pdf(pdf_path, config):
     anexo_output_path = os.path.join(
         anexo_iii_folder,
         f"anexoIII_{certificate_code}.docx"
+    )
+    anexo_vi_output_path = os.path.join(
+        anexo_vi_folder,
+        f"anexoVI_{certificate_code}.docx"
     )
 
     create_info_docx(
@@ -121,7 +128,16 @@ def process_pdf(pdf_path, config):
         config["teacher_name"]
     )
 
-    generated_files = [info_output_path, anexo_output_path]
+    create_anexo_vi_docx(
+        payload.data,
+        payload.modules,
+        payload.duration_text,
+        anexo_vi_output_path,
+        schedule,
+        config["teacher_name"]
+    )
+
+    generated_files = [info_output_path, anexo_output_path, anexo_vi_output_path]
 
     for training_module in payload.training_modules:
         module_code = safe_path_name(

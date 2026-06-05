@@ -174,8 +174,12 @@ def prompt_start_date(custom_holidays=None):
 
 
 def prompt_copy_subcriteria():
-    value = input("¿Copiar subcriterios en el Anexo IV? (y/n, defecto n): ").strip().lower()
-    return value in ("y", "yes")
+    value = input("¿Copiar subcriterios en el Anexo IV? (y/n, defecto y): ").strip().lower()
+
+    if not value:
+        return True
+
+    return value in ("y", "yes", "s", "si", "sí")
 
 
 def prompt_schedule_config():
