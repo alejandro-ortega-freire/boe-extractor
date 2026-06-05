@@ -1,11 +1,18 @@
 import unittest
+from datetime import date
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from docx import Document
+from docx.shared import RGBColor
 
-from source.anexo_v_writer import build_anexo_v_filename, create_anexo_v_docx
-from source.models import BasicData, TrainingModule, TrainingUnit
+from source.anexo_v_writer import (
+    build_anexo_v_filename,
+    clean_evaluation_space_name,
+    create_anexo_v_docx,
+)
+from source.models import BasicData, SummaryModule, TrainingModule, TrainingUnit
+from source.schedule import calculate_schedule
 
 
 class AnexoVWriterTests(unittest.TestCase):
@@ -95,6 +102,156 @@ class AnexoVWriterTests(unittest.TestCase):
 
         self.assertEqual(len(table.rows), 3)
         self.assertEqual(table.rows[2].cells[0].text, "MF0001_1: Módulo de prueba")
+
+    def test_anexo_v_splits_module_row_into_evaluation_events(self):
+        schedule = calculate_schedule(
+            [SummaryModule(text="MF0001_1: Módulo de prueba (60 horas)")],
+            6,
+            date(2026, 6, 1),
+            custom_holidays={},
+        )
+
+        with TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "anexoV.docx"
+            create_anexo_v_docx(
+                BasicData(codigo="TEST0101"),
+                TrainingModule(
+                    identifier="MF0001_1: Módulo de prueba",
+                    hours="60",
+                ),
+                "60 horas",
+                output_path,
+                schedule=schedule,
+                add_header_footer=lambda doc, teacher_name: None,
+            )
+
+            table = Document(output_path).tables[0]
+            labels = [row.cells[1].text for row in table.rows[2:]]
+            durations = [row.cells[3].text for row in table.rows[2:]]
+            dates = [row.cells[4].text for row in table.rows[2:]]
+
+        self.assertEqual(
+            labels,
+            [
+                "E1: Actividad Evaluable",
+                "E2: Actividad Evaluable",
+                "E3: Actividad Evaluable",
+                "Prueba final",
+                "Prueba de recuperación",
+            ],
+        )
+        self.assertEqual(durations, ["4 horas", "4 horas", "4 horas", "6 horas", "6 horas"])
+        self.assertIn("(Sesión 9)", dates[-2])
+        self.assertIn("(Sesión 10)", dates[-1])
+
+    def test_anexo_v_session_numbers_restart_for_each_module(self):
+        schedule = calculate_schedule(
+            [
+                SummaryModule(text="MF0001_1: Primer módulo (30 horas)"),
+                SummaryModule(text="MF0002_1: Segundo módulo (30 horas)"),
+            ],
+            6,
+            date(2026, 6, 1),
+            custom_holidays={},
+        )
+
+        with TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "anexoV.docx"
+            create_anexo_v_docx(
+                BasicData(codigo="TEST0101"),
+                TrainingModule(
+                    identifier="MF0002_1: Segundo módulo",
+                    hours="30",
+                ),
+                "60 horas",
+                output_path,
+                schedule=schedule,
+                add_header_footer=lambda doc, teacher_name: None,
+            )
+
+            table = Document(output_path).tables[0]
+            dates = [row.cells[4].text for row in table.rows[2:]]
+
+        self.assertIn("(Sesión 4)", dates[-2])
+        self.assertIn("(Sesión 5)", dates[-1])
+        self.assertNotIn("(Sesión 9)", dates[-2])
+        self.assertNotIn("(Sesión 10)", dates[-1])
+
+    def test_anexo_v_uses_clean_red_training_spaces(self):
+        schedule = calculate_schedule(
+            [SummaryModule(text="MF0001_1: Módulo de prueba (30 horas)")],
+            6,
+            date(2026, 6, 1),
+            custom_holidays={},
+        )
+
+        with TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "anexoV.docx"
+            create_anexo_v_docx(
+                BasicData(codigo="TEST0101"),
+                TrainingModule(
+                    identifier="MF0001_1: Módulo de prueba",
+                    hours="30",
+                ),
+                "30 horas",
+                output_path,
+                schedule=schedule,
+                spaces=[
+                    "Aula de gestión de 45 m2 (para 15 alumnos) o de 60 m2 (para 25 alumnos)",
+                    "Taller de prácticas de 30 m2 (para 15 alumnos) o de 50 m2 (para 25 alumnos)",
+                ],
+                add_header_footer=lambda doc, teacher_name: None,
+            )
+
+            cell = Document(output_path).tables[0].rows[2].cells[2]
+            runs = [
+                run
+                for paragraph in cell.paragraphs
+                for run in paragraph.runs
+            ]
+
+        self.assertEqual(cell.text, "Aula de gestión\n\nTaller de prácticas")
+        self.assertTrue(runs)
+        self.assertTrue(all(run.font.color.rgb == RGBColor(192, 0, 0) for run in runs))
+
+    def test_anexo_v_marks_only_activity_durations_in_red(self):
+        schedule = calculate_schedule(
+            [SummaryModule(text="MF0001_1: Módulo de prueba (60 horas)")],
+            6,
+            date(2026, 6, 1),
+            custom_holidays={},
+        )
+
+        with TemporaryDirectory() as tmp:
+            output_path = Path(tmp) / "anexoV.docx"
+            create_anexo_v_docx(
+                BasicData(codigo="TEST0101"),
+                TrainingModule(
+                    identifier="MF0001_1: Módulo de prueba",
+                    hours="60",
+                ),
+                "60 horas",
+                output_path,
+                schedule=schedule,
+                add_header_footer=lambda doc, teacher_name: None,
+            )
+
+            table = Document(output_path).tables[0]
+            activity_duration = table.rows[2].cells[3].paragraphs[0].runs[0]
+            final_duration = table.rows[-2].cells[3].paragraphs[0].runs[0]
+            recovery_duration = table.rows[-1].cells[3].paragraphs[0].runs[0]
+
+        self.assertEqual(activity_duration.font.color.rgb, RGBColor(192, 0, 0))
+        self.assertIsNone(final_duration.font.color.rgb)
+        self.assertIsNone(recovery_duration.font.color.rgb)
+
+    def test_clean_evaluation_space_name_removes_area_and_capacity(self):
+        self.assertEqual(
+            clean_evaluation_space_name(
+                "Aula de gestión de 45 m2 (para 15 alumnos) o de 60 m2 (para 25 alumnos)"
+            ),
+            "Aula de gestión",
+        )
 
 
 if __name__ == "__main__":

@@ -229,6 +229,7 @@ def calculate_schedule(modules, session_hours, start_date, custom_holidays=None)
     current_date = next_working_day(start_date, custom_holidays)
     used_hours = 0
     dates_by_code = {}
+    session_numbers = {}
     first_date = current_date
 
     for code, hours in iter_scheduled_items(modules):
@@ -240,13 +241,23 @@ def calculate_schedule(modules, session_hours, start_date, custom_holidays=None)
         remaining = hours
         end = current_date
         end_note = None
+        sessions = []
 
         while remaining > 0:
+            if current_date not in session_numbers:
+                session_numbers[current_date] = len(session_numbers) + 1
+
             available = session_hours - used_hours
             consumed = min(remaining, available)
             remaining -= consumed
             used_hours += consumed
             end = current_date
+            sessions.append({
+                "date": current_date,
+                "hours": consumed,
+                "session_number": session_numbers[current_date],
+                "session_hours": session_hours,
+            })
 
             if remaining == 0:
                 if used_hours < session_hours:
@@ -265,6 +276,7 @@ def calculate_schedule(modules, session_hours, start_date, custom_holidays=None)
             "start_note": start_note,
             "end_note": end_note,
             "text": format_date_range(start, end, start_note, end_note),
+            "sessions": sessions,
         }
 
     last_date = max((item["end"] for item in dates_by_code.values()), default=first_date)

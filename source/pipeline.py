@@ -158,6 +158,7 @@ def process_pdf(pdf_path, config):
             payload.duration_text,
             anexo_v_output_path,
             schedule,
+            payload.spaces,
             add_header_footer,
             config["teacher_name"]
         )

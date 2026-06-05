@@ -1,6 +1,8 @@
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.shared import Cm, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Pt, RGBColor
+import re
 
 from source.anexo_iv_writer import (
     add_horizontal_line,
@@ -15,6 +17,7 @@ from source.docx_styles import (
     LIGHT_BORDER,
 )
 from source.settings import DEFAULT_TEACHER_NAME
+from source.schedule import code_from_text, format_date
 from source.table_styles import (
     apply_vertical_borders,
     set_cell_shading,
@@ -41,7 +44,250 @@ def evaluation_blocks(module):
     return module.ufs or [module]
 
 
-def add_anexo_v_table(doc, module):
+def clean_evaluation_space_name(space):
+    text = str(space or "").strip()
+    text = re.sub(r"\s+de\s+\d+(?:,\d+)?\s*m2\b.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+\d+(?:,\d+)?\s*m2\b.*$", "", text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def evaluation_spaces_text(spaces):
+    names = []
+    seen = set()
+
+    for space in spaces or []:
+        name = clean_evaluation_space_name(space)
+        key = name.lower()
+
+        if name and key not in seen:
+            names.append(name)
+            seen.add(key)
+
+    return "\n\n".join(names)
+
+
+def hours_value(value):
+    match = re.search(r"\d+", str(value or ""))
+    return int(match.group(0)) if match else 0
+
+
+def evaluable_activity_count(hours):
+    if hours <= 30:
+        return 1
+    if hours <= 50:
+        return 2
+    if hours <= 90:
+        return 3
+    if hours <= 120:
+        return 4
+    return 5
+
+
+def block_code(block):
+    return getattr(block, "code", "") or code_from_text(getattr(block, "identifier", ""))
+
+
+def sessions_for_block(schedule, block):
+    code = block_code(block)
+
+    if not schedule or not code:
+        return []
+
+    return list(schedule.get("dates_by_code", {}).get(code, {}).get("sessions", []))
+
+
+def module_sessions(module, schedule):
+    sessions = []
+    session_number_by_date = {}
+
+    for block in evaluation_blocks(module):
+        code = block_code(block)
+
+        for session in sessions_for_block(schedule, block):
+            item = dict(session)
+            item["block_code"] = code
+            sessions.append(item)
+
+    sessions = sorted(sessions, key=lambda item: item["session_number"])
+
+    for item in sessions:
+        day = item["date"]
+
+        if day not in session_number_by_date:
+            session_number_by_date[day] = len(session_number_by_date) + 1
+
+        item["module_session_number"] = session_number_by_date[day]
+
+    return sessions
+
+
+def select_evenly(items, count):
+    if count <= 0 or not items:
+        return []
+
+    if count >= len(items):
+        return list(items)
+
+    selected = []
+    used_indexes = set()
+
+    for number in range(1, count + 1):
+        index = round(number * (len(items) + 1) / (count + 1)) - 1
+        index = max(0, min(index, len(items) - 1))
+
+        while index in used_indexes and index + 1 < len(items):
+            index += 1
+
+        while index in used_indexes and index > 0:
+            index -= 1
+
+        used_indexes.add(index)
+        selected.append(items[index])
+
+    return sorted(selected, key=lambda item: item["session_number"])
+
+
+def recovery_session_index(sessions):
+    if not sessions:
+        return None
+
+    last_index = len(sessions) - 1
+    last = sessions[last_index]
+    full_hours = last.get("session_hours", 0)
+
+    if full_hours and last["hours"] >= full_hours - 1:
+        return last_index
+
+    for index in range(last_index - 1, -1, -1):
+        if sessions[index]["hours"] == full_hours:
+            return index
+
+    return last_index
+
+
+def previous_session_index(sessions, current_index):
+    if current_index is None:
+        return None
+
+    for index in range(current_index - 1, -1, -1):
+        if sessions[index]["hours"] >= 3:
+            return index
+
+    return current_index - 1 if current_index > 0 else None
+
+
+def duration_text(event_type, session):
+    session_hours = session.get("session_hours", 0)
+
+    if event_type == "activity":
+        if not session.get("hours"):
+            return ""
+
+        return f"{3 if session['hours'] == 3 else 4} horas"
+
+    if not session.get("session_hours") and not session.get("hours"):
+        return ""
+
+    return f"{session_hours or session['hours']} horas"
+
+
+def evaluation_date_text(session):
+    if not session.get("date"):
+        return ""
+
+    session_number = session.get("module_session_number", session.get("session_number"))
+    return f"{format_date(session['date'])}\n(Sesión {session_number})"
+
+
+def build_evaluation_events(module, schedule):
+    sessions = module_sessions(module, schedule)
+
+    if not sessions:
+        return {}
+
+    recovery_index = recovery_session_index(sessions)
+    final_index = previous_session_index(sessions, recovery_index)
+
+    module_hours = hours_value(module.hours)
+    activity_count = evaluable_activity_count(module_hours)
+    blocked_indexes = {index for index in (final_index, recovery_index) if index is not None}
+
+    eligible_activity_sessions = [
+        session
+        for index, session in enumerate(sessions)
+        if index not in blocked_indexes
+        and index > 0
+        and session["hours"] >= 3
+        and (final_index is None or index < final_index)
+    ]
+    selected_activity_sessions = select_evenly(eligible_activity_sessions, activity_count)
+
+    events_by_block = {}
+
+    for activity_number, session in enumerate(selected_activity_sessions, start=1):
+        events_by_block.setdefault(session["block_code"], []).append({
+            "type": "activity",
+            "label": f"E{activity_number}: Actividad Evaluable",
+            "session": session,
+        })
+
+    if final_index is not None:
+        session = sessions[final_index]
+        events_by_block.setdefault(session["block_code"], []).append({
+            "type": "final",
+            "label": "Prueba final",
+            "session": session,
+        })
+
+    if recovery_index is not None:
+        session = sessions[recovery_index]
+        events_by_block.setdefault(session["block_code"], []).append({
+            "type": "recovery",
+            "label": "Prueba de recuperación",
+            "session": session,
+        })
+
+    for events in events_by_block.values():
+        events.sort(key=lambda event: event["session"]["session_number"])
+
+    return events_by_block
+
+
+def set_cell_runs_color(cell, color):
+    for paragraph in cell.paragraphs:
+        for run in paragraph.runs:
+            run.font.color.rgb = color
+
+
+def set_red_cell_text(cell, text, align=WD_ALIGN_PARAGRAPH.CENTER):
+    set_cell_text(cell, text, size=ANEXO_IV_FONT_SIZE, align=align)
+    set_cell_runs_color(cell, RGBColor(192, 0, 0))
+
+
+def set_duration_cell_text(cell, event, align=WD_ALIGN_PARAGRAPH.CENTER):
+    set_cell_text(cell, duration_text(event["type"], event["session"]), size=ANEXO_IV_FONT_SIZE, align=align)
+
+    if event["type"] == "activity":
+        set_cell_runs_color(cell, RGBColor(192, 0, 0))
+
+
+def add_event_cells(cells, event, spaces_text=""):
+    session = event["session"]
+
+    values = ["", event["label"], spaces_text, "", evaluation_date_text(session)]
+
+    for index, value in enumerate(values):
+        align = WD_ALIGN_PARAGRAPH.CENTER if index in (2, 3, 4) else WD_ALIGN_PARAGRAPH.LEFT
+
+        if index == 2:
+            set_red_cell_text(cells[index], value, align=align)
+        elif index == 3:
+            set_duration_cell_text(cells[index], event, align=align)
+        else:
+            set_cell_text(cells[index], value, size=ANEXO_IV_FONT_SIZE, align=align)
+
+
+def add_anexo_v_table(doc, module, schedule=None, spaces=None):
     add_horizontal_line(doc)
 
     table = doc.add_table(rows=2, cols=5)
@@ -77,16 +323,34 @@ def add_anexo_v_table(doc, module):
         set_cell_text(cell, header, size=ANEXO_IV_FONT_SIZE)
         cell.width = widths[offset]
 
+    events_by_block = build_evaluation_events(module, schedule)
+    spaces_text = evaluation_spaces_text(spaces)
+
     for block in evaluation_blocks(module):
-        cells = table.add_row().cells
+        code = block_code(block)
+        events = events_by_block.get(code) or [{
+            "type": "activity",
+            "label": "",
+            "session": {"hours": 0, "session_hours": 0, "date": None, "session_number": ""},
+        }]
+        first_row_index = len(table.rows)
 
-        for index, cell in enumerate(cells):
-            cell.width = widths[index]
+        for event in events:
+            cells = table.add_row().cells
 
-        set_cell_text(cells[0], block_label(block), size=ANEXO_IV_FONT_SIZE)
+            for index, cell in enumerate(cells):
+                cell.width = widths[index]
 
-        for cell in cells[1:]:
-            set_cell_text(cell, "", size=ANEXO_IV_FONT_SIZE)
+            add_event_cells(cells, event, spaces_text)
+
+        last_row_index = len(table.rows) - 1
+
+        if last_row_index > first_row_index:
+            block_cell = table.cell(first_row_index, 0).merge(table.cell(last_row_index, 0))
+        else:
+            block_cell = table.cell(first_row_index, 0)
+
+        set_cell_text(block_cell, block_label(block), size=ANEXO_IV_FONT_SIZE)
 
     apply_vertical_borders(table, LIGHT_BORDER)
     return table
@@ -106,6 +370,8 @@ def add_anexo_v_notes(doc):
         ),
     ]
 
+    doc.add_paragraph("")
+
     for note in notes:
         paragraph = doc.add_paragraph()
         paragraph.paragraph_format.space_before = Pt(0)
@@ -120,6 +386,7 @@ def create_anexo_v_docx(
     duration_text,
     output_path,
     schedule=None,
+    spaces=None,
     add_header_footer=None,
     teacher_name=DEFAULT_TEACHER_NAME,
 ):
@@ -140,7 +407,7 @@ def create_anexo_v_docx(
         document_title="Planificación de la evaluación del aprendizaje",
         module_section_title="PLANIFICACIÓN DE LA EVALUACIÓN DEL APRENDIZAJE",
     )
-    add_anexo_v_table(doc, module)
+    add_anexo_v_table(doc, module, schedule, spaces)
     add_anexo_v_notes(doc)
 
     if add_header_footer is None:
