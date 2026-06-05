@@ -1,6 +1,7 @@
 import os
 
 from source.anexo_iv_writer import build_module_filename, create_anexo_iv_docx
+from source.anexo_v_writer import build_anexo_v_filename, create_anexo_v_docx
 from source.basic_data import extract_basic_data
 from source.cleaning import clean_text
 from source.config import OUTPUT_FOLDER
@@ -83,14 +84,20 @@ def process_pdf(pdf_path, config):
 
     certificate_code = safe_path_name(payload.data.codigo, base_name)
     certificate_output_folder = os.path.join(OUTPUT_FOLDER, certificate_code)
+    anexo_iii_folder = os.path.join(certificate_output_folder, "Anexo III")
+    anexo_iv_folder = os.path.join(certificate_output_folder, "Anexos IV")
+    anexo_v_folder = os.path.join(certificate_output_folder, "Anexos V")
     os.makedirs(certificate_output_folder, exist_ok=True)
+    os.makedirs(anexo_iii_folder, exist_ok=True)
+    os.makedirs(anexo_iv_folder, exist_ok=True)
+    os.makedirs(anexo_v_folder, exist_ok=True)
 
     info_output_path = os.path.join(
         certificate_output_folder,
         f"info_{certificate_code}.docx"
     )
     anexo_output_path = os.path.join(
-        certificate_output_folder,
+        anexo_iii_folder,
         f"anexoIII_{certificate_code}.docx"
     )
 
@@ -122,8 +129,12 @@ def process_pdf(pdf_path, config):
             "MF"
         )
         anexo_iv_output_path = os.path.join(
-            certificate_output_folder,
+            anexo_iv_folder,
             build_module_filename(module_code, certificate_code)
+        )
+        anexo_v_output_path = os.path.join(
+            anexo_v_folder,
+            build_anexo_v_filename(module_code, certificate_code)
         )
 
         create_anexo_iv_docx(
@@ -140,5 +151,17 @@ def process_pdf(pdf_path, config):
         )
 
         generated_files.append(anexo_iv_output_path)
+
+        create_anexo_v_docx(
+            payload.data,
+            training_module,
+            payload.duration_text,
+            anexo_v_output_path,
+            schedule,
+            add_header_footer,
+            config["teacher_name"]
+        )
+
+        generated_files.append(anexo_v_output_path)
 
     return generated_files

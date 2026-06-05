@@ -128,7 +128,12 @@ def mapping_from_anexo(path, fill_empty_with_previous=True):
 
 
 def generated_file_for_module(output_dir, certificate_code, module_code):
-    return Path(output_dir) / certificate_code / f"anexoIV_{module_code}_{certificate_code}.docx"
+    return (
+        Path(output_dir)
+        / certificate_code
+        / "Anexos IV"
+        / f"anexoIV_{module_code}_{certificate_code}.docx"
+    )
 
 
 def compare_mappings(expected, actual):

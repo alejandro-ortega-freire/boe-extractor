@@ -330,9 +330,18 @@ def build_module_filename(module_code, certificate_code):
     return f"anexoIV_{module_code}_{certificate_code}.docx"
 
 
-def add_module_header(doc, data, module, duration_text, schedule):
-    add_heading(doc, f"ANEXO IV - {module_title(module)}", size=12, space_after=8)
-    add_heading(doc, "Programación didáctica", size=12, space_after=4)
+def add_module_header(
+    doc,
+    data,
+    module,
+    duration_text,
+    schedule,
+    annex_label="ANEXO IV",
+    document_title="Programación didáctica",
+    module_section_title="PROGRAMACIÓN DIDÁCTICA DEL MÓDULO PROFESIONAL",
+):
+    add_heading(doc, f"{annex_label} - {module_title(module)}", size=12, space_after=8)
+    add_heading(doc, document_title, size=12, space_after=4)
     add_heading(doc, "(Modalidad Presencial)", size=12, space_after=16)
 
     certificate = f"{data.codigo} {data.nombre.upper()}".strip()
@@ -362,7 +371,7 @@ def add_module_header(doc, data, module, duration_text, schedule):
     )
     doc.add_paragraph("")
 
-    add_heading(doc, "PROGRAMACIÓN DIDÁCTICA DEL MÓDULO PROFESIONAL", size=11, space_after=8)
+    add_heading(doc, module_section_title, size=11, space_after=8)
 
     module_dates = module_schedule_text(schedule, module)
 
