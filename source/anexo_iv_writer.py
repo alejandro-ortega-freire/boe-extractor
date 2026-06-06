@@ -2,7 +2,7 @@ from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Inches, Pt
+from docx.shared import Cm, Inches, Pt, RGBColor
 import re
 
 from source.anexo_iii_writer import (
@@ -212,9 +212,69 @@ def set_contents_cell_text(cell, contents=None, suggested=False):
         add_content_bullets(cell, content.bullets, color=color)
 
 
-def set_strategy_placeholder_cell_text(cell):
+def strategy_suggestion_lines(module, schedule):
+    if not schedule:
+        return []
+
+    from source.anexo_v_writer import build_evaluation_events
+
+    events_by_block = build_evaluation_events(module, schedule)
+    events = [
+        event
+        for block_events in events_by_block.values()
+        for event in block_events
+    ]
+    events.sort(key=lambda event: event["session"]["session_number"])
+
+    lines = [
+        "Sugerencia:",
+        "SESIÓN 1 ⭢ Presentación del MF",
+    ]
+
+    for event in events:
+        session_number = event["session"].get(
+            "module_session_number",
+            event["session"].get("session_number"),
+        )
+
+        if event["type"] == "activity":
+            match = re.match(r"^(E\d+)", event["label"])
+            label = match.group(1) if match else event["label"]
+        elif event["type"] == "final":
+            label = "Prueba Final"
+        elif event["type"] == "recovery":
+            label = "Recuperación"
+        else:
+            label = event["label"]
+
+        lines.append(f"SESIÓN {session_number} ⭢ {label}")
+
+    return lines
+
+
+def add_strategy_suggestion(cell, lines):
+    if not lines:
+        return
+
+    red = RGBColor(192, 0, 0)
+
+    cell.add_paragraph("")
+    cell.add_paragraph("")
+
+    for index, line in enumerate(lines):
+        paragraph = cell.add_paragraph()
+        paragraph.paragraph_format.space_before = Pt(0)
+        paragraph.paragraph_format.space_after = Pt(0)
+        run = paragraph.add_run(line)
+        run.font.size = Pt(ANEXO_IV_FONT_SIZE)
+        run.font.color.rgb = red
+        run.bold = index == 0
+        run.italic = index > 0
+
+
+def set_strategy_placeholder_cell_text(cell, suggestion_lines=None):
     titles = [
-        "SESIÓN 1",
+        "SESIÓN #",
         "ESTRATEGIA\nMETODOLÓGICA",
         "Inicio (1h)",
         "Desarrollo (4h)",
@@ -242,6 +302,9 @@ def set_strategy_placeholder_cell_text(cell):
         text_paragraph.paragraph_format.space_after = Pt(0)
         text_run = text_paragraph.add_run("Lorem ipsum dolor met")
         text_run.font.size = Pt(ANEXO_IV_FONT_SIZE)
+        text_run.font.color.rgb = RGBColor(192, 0, 0)
+
+    add_strategy_suggestion(cell, suggestion_lines)
 
 
 def add_horizontal_line(doc):
@@ -419,6 +482,8 @@ def add_anexo_iv_table(
     set_exact_row_height(table.rows[0], MAIN_HEADER_ROW_HEIGHT)
 
     ufs = module.ufs
+    suggestion_lines = strategy_suggestion_lines(module, schedule)
+    suggestion_pending = bool(suggestion_lines)
 
     if not ufs:
         criteria = module.criteria or [Criterion()]
@@ -441,7 +506,8 @@ def add_anexo_iv_table(
                 contents_by_criterion[criterion_index],
                 suggested=suggested_contents
             )
-            set_strategy_placeholder_cell_text(cells[2])
+            set_strategy_placeholder_cell_text(cells[2], suggestion_lines if suggestion_pending else None)
+            suggestion_pending = False
             set_spaces_equipment_cell_text(cells[3], spaces, equipment_groups)
 
         apply_light_vertical_borders(table)
@@ -495,11 +561,46 @@ def add_anexo_iv_table(
                 contents_by_criterion[criterion_index],
                 suggested=suggested_contents
             )
-            set_strategy_placeholder_cell_text(cells[2])
+            set_strategy_placeholder_cell_text(cells[2], suggestion_lines if suggestion_pending else None)
+            suggestion_pending = False
             set_spaces_equipment_cell_text(cells[3], spaces, equipment_groups)
 
     apply_light_vertical_borders(table)
     return table
+
+
+def add_anexo_iv_notes(doc):
+    notes = [
+        (
+            "1  Incluir los Resultados de Aprendizaje (RA) tal y como se describen "
+            "en el certificado profesional. En los certificados profesionales "
+            "regulados en el plan antiguo los RA se corresponden con las Capacidades."
+        ),
+        (
+            "2  Introducir los contenidos que se contemplan en el certificado, "
+            "asignándolos a los RA correspondientes y secuenciándolos pedagógicamente."
+        ),
+        (
+            "3  Especificar las diferentes acciones de enseñanza-aprendizaje que han "
+            "de realizar los formadores y/o el alumnado para el logro de los resultados "
+            "de aprendizaje, indicando los métodos didácticos a utilizar y los recursos "
+            "didácticos asociados. Se incluyen también en este apartado las actividades "
+            "de aprendizaje a realizar por los alumnos."
+        ),
+        (
+            "4  Indicar los que corresponden exclusivamente a ese módulo, considerando "
+            "lo establecido en la normativa correspondiente."
+        ),
+    ]
+
+    doc.add_paragraph("")
+
+    for note in notes:
+        paragraph = doc.add_paragraph()
+        paragraph.paragraph_format.space_before = Pt(0)
+        paragraph.paragraph_format.space_after = Pt(0)
+        run = paragraph.add_run(note)
+        run.font.size = Pt(ANEXO_IV_FONT_SIZE)
 
 
 def create_anexo_iv_docx(
@@ -524,6 +625,7 @@ def create_anexo_iv_docx(
 
     add_module_header(doc, data, module, duration_text, schedule, training_center=training_center)
     add_anexo_iv_table(doc, module, schedule, copy_subcriteria, spaces, equipment_groups)
+    add_anexo_iv_notes(doc)
 
     if add_header_footer is None:
         from source.docx_utils import add_header_footer
