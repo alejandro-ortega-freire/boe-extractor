@@ -22,6 +22,7 @@ from source.docx_styles import (
     WHITE_FILL,
 )
 from source.docx_utils import add_horizontal_rule
+from source.evaluation_plan import build_evaluation_events
 from source.models import Criterion
 from source.schedule import code_from_text, format_date_range
 from source.settings import (
@@ -215,8 +216,6 @@ def set_contents_cell_text(cell, contents=None, suggested=False):
 def strategy_suggestion_lines(module, schedule):
     if not schedule:
         return []
-
-    from source.anexo_v_writer import build_evaluation_events
 
     events_by_block = build_evaluation_events(module, schedule)
     events = [

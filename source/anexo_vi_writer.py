@@ -11,11 +11,9 @@ from source.anexo_iii_writer import (
     set_header_cell,
     title_without_hours,
 )
-from source.anexo_v_writer import (
+from source.evaluation_plan import (
+    activity_numbers_by_block,
     evaluable_activity_count,
-    previous_session_index,
-    recovery_session_index,
-    select_evenly,
 )
 from source.docx_styles import ANEXO_FONT_SIZE, ANEXO_III_TABLE_WIDTH_PERCENT
 from source.docx_styles import ANEXO_III_HEADER_FILL
@@ -140,52 +138,6 @@ def max_evaluable_count(modules):
 def set_row_widths(row, widths):
     for index, cell in enumerate(row.cells):
         cell.width = widths[index]
-
-
-def module_sessions(module, schedule):
-    if not schedule:
-        return []
-
-    sessions = []
-    blocks = module.ufs or [module.text]
-
-    for block in blocks:
-        code = code_from_text(block)
-        scheduled = schedule.get("dates_by_code", {}).get(code, {})
-
-        for session in scheduled.get("sessions", []):
-            item = dict(session)
-            item["block_code"] = code
-            sessions.append(item)
-
-    return sorted(sessions, key=lambda item: item["session_number"])
-
-
-def activity_numbers_by_block(module, schedule):
-    sessions = module_sessions(module, schedule)
-
-    if not sessions:
-        return {}
-
-    recovery_index = recovery_session_index(sessions)
-    final_index = previous_session_index(sessions, recovery_index)
-    blocked_indexes = {index for index in (final_index, recovery_index) if index is not None}
-    activity_count = evaluable_activity_count(parse_hours(module.text))
-    eligible_sessions = [
-        session
-        for index, session in enumerate(sessions)
-        if index not in blocked_indexes
-        and index > 0
-        and session["hours"] >= 3
-        and (final_index is None or index < final_index)
-    ]
-
-    result = {}
-
-    for activity_number, session in enumerate(select_evenly(eligible_sessions, activity_count), start=1):
-        result.setdefault(session["block_code"], set()).add(activity_number)
-
-    return result
 
 
 def set_score_cell(cell):
