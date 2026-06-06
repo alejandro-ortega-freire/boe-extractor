@@ -1,12 +1,11 @@
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import Cm, Inches, Pt, RGBColor
+from docx.shared import Cm, Inches, Pt
 
 from source.anexo_iii_writer import (
     add_anexo_header,
+    certificate_modules,
     configure_anexo_section,
     set_header_cell,
     title_without_hours,
@@ -15,6 +14,7 @@ from source.evaluation_plan import (
     activity_numbers_by_block,
     evaluable_activity_count,
 )
+from source.docx_table_helpers import RED, WHITE, add_title, apply_table_borders, set_cell_runs_color
 from source.docx_styles import ANEXO_FONT_SIZE, ANEXO_III_TABLE_WIDTH_PERCENT
 from source.docx_styles import ANEXO_III_HEADER_FILL
 from source.schedule import code_from_text, parse_hours
@@ -23,72 +23,11 @@ from source.table_styles import set_cell_shading, set_cell_text, set_exact_row_h
 
 
 EMPTY_EVALUATION_FILL = "F2F2F2"
-BLACK_BORDER = "000000"
-
-
-def add_title(doc, text):
-    paragraph = doc.add_paragraph()
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    paragraph.paragraph_format.space_before = Pt(8)
-    paragraph.paragraph_format.space_after = Pt(4)
-    run = paragraph.add_run(text)
-    run.bold = True
-    run.font.size = Pt(ANEXO_FONT_SIZE)
-    return paragraph
 
 
 def set_red_text(cell, text, bold=False, align=WD_ALIGN_PARAGRAPH.LEFT):
     set_cell_text(cell, text, bold=bold, size=ANEXO_FONT_SIZE, align=align)
-
-    for paragraph in cell.paragraphs:
-        for run in paragraph.runs:
-            run.font.color.rgb = RGBColor(255, 0, 0)
-
-
-def set_cell_borders(cell, color=BLACK_BORDER):
-    tc_pr = cell._tc.get_or_add_tcPr()
-    borders = tc_pr.first_child_found_in("w:tcBorders")
-
-    if borders is None:
-        borders = OxmlElement("w:tcBorders")
-        tc_pr.append(borders)
-
-    for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        border = borders.find(qn(f"w:{border_name}"))
-
-        if border is None:
-            border = OxmlElement(f"w:{border_name}")
-            borders.append(border)
-
-        border.set(qn("w:val"), "single")
-        border.set(qn("w:sz"), "4")
-        border.set(qn("w:space"), "0")
-        border.set(qn("w:color"), color)
-
-
-def apply_table_borders(table, color=BLACK_BORDER):
-    table_pr = table._tbl.tblPr
-    borders = table_pr.find(qn("w:tblBorders"))
-
-    if borders is None:
-        borders = OxmlElement("w:tblBorders")
-        table_pr.append(borders)
-
-    for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
-        border = borders.find(qn(f"w:{border_name}"))
-
-        if border is None:
-            border = OxmlElement(f"w:{border_name}")
-            borders.append(border)
-
-        border.set(qn("w:val"), "single")
-        border.set(qn("w:sz"), "4")
-        border.set(qn("w:space"), "0")
-        border.set(qn("w:color"), color)
-
-    for row in table.rows:
-        for cell in row.cells:
-            set_cell_borders(cell, color)
+    set_cell_runs_color(cell, RED)
 
 
 def set_main_header_with_subtitle(cell, title, subtitle):
@@ -100,13 +39,13 @@ def set_main_header_with_subtitle(cell, title, subtitle):
     title_run = paragraph.add_run(title)
     title_run.bold = True
     title_run.font.size = Pt(ANEXO_FONT_SIZE)
-    title_run.font.color.rgb = RGBColor(255, 255, 255)
+    title_run.font.color.rgb = WHITE
 
     paragraph.add_run("\n")
     subtitle_run = paragraph.add_run(subtitle)
     subtitle_run.bold = True
     subtitle_run.font.size = Pt(ANEXO_FONT_SIZE)
-    subtitle_run.font.color.rgb = RGBColor(255, 255, 255)
+    subtitle_run.font.color.rgb = WHITE
 
 
 def module_label(module_text):
@@ -117,14 +56,6 @@ def module_label(module_text):
 def uf_label(uf_text):
     text = title_without_hours(uf_text or "")
     return text
-
-
-def certificate_modules(modules):
-    return [
-        module
-        for module in modules
-        if not code_from_text(module.text).startswith("MP")
-    ]
 
 
 def max_evaluable_count(modules):

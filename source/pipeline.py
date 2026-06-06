@@ -30,6 +30,44 @@ def safe_path_name(value, fallback):
     return safe or fallback
 
 
+def certificate_output_paths(output_folder, certificate_code):
+    certificate_folder = os.path.join(output_folder, certificate_code)
+    folders = {
+        "certificate": certificate_folder,
+        "anexo_iii": os.path.join(certificate_folder, "Anexo III"),
+        "anexo_iv": os.path.join(certificate_folder, "Anexos IV"),
+        "anexo_v": os.path.join(certificate_folder, "Anexos V"),
+        "anexo_vi": os.path.join(certificate_folder, "Anexo VI"),
+        "anexo_vii": os.path.join(certificate_folder, "Anexo VII"),
+    }
+    files = {
+        "info": os.path.join(certificate_folder, f"info_{certificate_code}.docx"),
+        "anexo_iii": os.path.join(folders["anexo_iii"], f"anexoIII_{certificate_code}.docx"),
+        "anexo_vi": os.path.join(folders["anexo_vi"], f"anexoVI_{certificate_code}.docx"),
+        "anexo_vii": os.path.join(folders["anexo_vii"], f"anexoVII_{certificate_code}.docx"),
+    }
+
+    return {"folders": folders, "files": files}
+
+
+def ensure_output_folders(paths):
+    for folder in paths["folders"].values():
+        os.makedirs(folder, exist_ok=True)
+
+
+def module_output_paths(paths, module_code, certificate_code):
+    return {
+        "anexo_iv": os.path.join(
+            paths["folders"]["anexo_iv"],
+            build_module_filename(module_code, certificate_code),
+        ),
+        "anexo_v": os.path.join(
+            paths["folders"]["anexo_v"],
+            build_anexo_v_filename(module_code, certificate_code),
+        ),
+    }
+
+
 def build_payload(pdf_path):
     raw_text = extract_text(pdf_path)
     text = clean_text(raw_text)
@@ -86,35 +124,8 @@ def process_pdf(pdf_path, config):
     )
 
     certificate_code = safe_path_name(payload.data.codigo, base_name)
-    certificate_output_folder = os.path.join(OUTPUT_FOLDER, certificate_code)
-    anexo_iii_folder = os.path.join(certificate_output_folder, "Anexo III")
-    anexo_iv_folder = os.path.join(certificate_output_folder, "Anexos IV")
-    anexo_v_folder = os.path.join(certificate_output_folder, "Anexos V")
-    anexo_vi_folder = os.path.join(certificate_output_folder, "Anexo VI")
-    anexo_vii_folder = os.path.join(certificate_output_folder, "Anexo VII")
-    os.makedirs(certificate_output_folder, exist_ok=True)
-    os.makedirs(anexo_iii_folder, exist_ok=True)
-    os.makedirs(anexo_iv_folder, exist_ok=True)
-    os.makedirs(anexo_v_folder, exist_ok=True)
-    os.makedirs(anexo_vi_folder, exist_ok=True)
-    os.makedirs(anexo_vii_folder, exist_ok=True)
-
-    info_output_path = os.path.join(
-        certificate_output_folder,
-        f"info_{certificate_code}.docx"
-    )
-    anexo_output_path = os.path.join(
-        anexo_iii_folder,
-        f"anexoIII_{certificate_code}.docx"
-    )
-    anexo_vi_output_path = os.path.join(
-        anexo_vi_folder,
-        f"anexoVI_{certificate_code}.docx"
-    )
-    anexo_vii_output_path = os.path.join(
-        anexo_vii_folder,
-        f"anexoVII_{certificate_code}.docx"
-    )
+    paths = certificate_output_paths(OUTPUT_FOLDER, certificate_code)
+    ensure_output_folders(paths)
 
     create_info_docx(
         payload.data,
@@ -123,7 +134,7 @@ def process_pdf(pdf_path, config):
         payload.equipment_groups,
         payload.duration_text,
         payload.training_modules,
-        info_output_path,
+        paths["files"]["info"],
         config["teacher_name"]
     )
 
@@ -131,7 +142,7 @@ def process_pdf(pdf_path, config):
         payload.data,
         payload.modules,
         payload.duration_text,
-        anexo_output_path,
+        paths["files"]["anexo_iii"],
         schedule,
         config["teacher_name"],
         training_center
@@ -141,7 +152,7 @@ def process_pdf(pdf_path, config):
         payload.data,
         payload.modules,
         payload.duration_text,
-        anexo_vi_output_path,
+        paths["files"]["anexo_vi"],
         schedule,
         config["teacher_name"],
         training_center
@@ -151,7 +162,7 @@ def process_pdf(pdf_path, config):
         payload.data,
         payload.modules,
         payload.duration_text,
-        anexo_vii_output_path,
+        paths["files"]["anexo_vii"],
         schedule,
         config["teacher_name"],
         training_center,
@@ -159,10 +170,10 @@ def process_pdf(pdf_path, config):
     )
 
     generated_files = [
-        info_output_path,
-        anexo_output_path,
-        anexo_vi_output_path,
-        anexo_vii_output_path,
+        paths["files"]["info"],
+        paths["files"]["anexo_iii"],
+        paths["files"]["anexo_vi"],
+        paths["files"]["anexo_vii"],
     ]
 
     for training_module in payload.training_modules:
@@ -170,20 +181,13 @@ def process_pdf(pdf_path, config):
             training_module.identifier.split(":", 1)[0],
             "MF"
         )
-        anexo_iv_output_path = os.path.join(
-            anexo_iv_folder,
-            build_module_filename(module_code, certificate_code)
-        )
-        anexo_v_output_path = os.path.join(
-            anexo_v_folder,
-            build_anexo_v_filename(module_code, certificate_code)
-        )
+        module_paths = module_output_paths(paths, module_code, certificate_code)
 
         create_anexo_iv_docx(
             payload.data,
             training_module,
             payload.duration_text,
-            anexo_iv_output_path,
+            module_paths["anexo_iv"],
             schedule,
             add_header_footer,
             config["copy_subcriteria"],
@@ -193,13 +197,13 @@ def process_pdf(pdf_path, config):
             training_center
         )
 
-        generated_files.append(anexo_iv_output_path)
+        generated_files.append(module_paths["anexo_iv"])
 
         create_anexo_v_docx(
             payload.data,
             training_module,
             payload.duration_text,
-            anexo_v_output_path,
+            module_paths["anexo_v"],
             schedule,
             payload.spaces,
             add_header_footer,
@@ -207,6 +211,6 @@ def process_pdf(pdf_path, config):
             training_center
         )
 
-        generated_files.append(anexo_v_output_path)
+        generated_files.append(module_paths["anexo_v"])
 
     return generated_files

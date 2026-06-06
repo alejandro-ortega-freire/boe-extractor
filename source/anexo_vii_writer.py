@@ -1,18 +1,14 @@
 from docx import Document
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Inches, Pt, RGBColor
+from docx.shared import Cm, Inches, Pt
 
-from source.anexo_iii_writer import add_anexo_header, configure_anexo_section
-from source.anexo_vi_writer import add_title, apply_table_borders, certificate_modules
+from source.anexo_iii_writer import add_anexo_header, certificate_modules, configure_anexo_section
 from source.docx_styles import ANEXO_FONT_SIZE, ANEXO_III_HEADER_FILL, ANEXO_III_TABLE_WIDTH_PERCENT
+from source.docx_table_helpers import RED, WHITE, add_title, apply_table_borders, set_cell_runs_color
 from source.schedule import code_from_text
 from source.settings import DEFAULT_STUDENT_COUNT, DEFAULT_TEACHER_NAME
 from source.table_styles import set_cell_shading, set_cell_text, set_exact_row_height, set_table_width_percent
-
-
-RED = RGBColor(255, 0, 0)
-WHITE = RGBColor(255, 255, 255)
 
 
 def module_code(module):
@@ -146,9 +142,7 @@ def set_content_cell(cell, text, color=None, bold=True):
     )
 
     if color is not None:
-        for paragraph in cell.paragraphs:
-            for run in paragraph.runs:
-                run.font.color.rgb = color
+        set_cell_runs_color(cell, color)
 
 
 def merge_vertical(table, start_row, end_row, col):

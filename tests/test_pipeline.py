@@ -4,10 +4,27 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from source.models import BasicData, DocumentPayload, TrainingModule
-from source.pipeline import process_pdf
+from source.pipeline import certificate_output_paths, module_output_paths, process_pdf
 
 
 class PipelineTests(unittest.TestCase):
+    def test_output_path_helpers_group_certificate_files(self):
+        paths = certificate_output_paths("output", "TEST0101")
+        module_paths = module_output_paths(paths, "MF0001_1", "TEST0101")
+
+        self.assertEqual(
+            paths["files"]["anexo_vii"],
+            str(Path("output") / "TEST0101" / "Anexo VII" / "anexoVII_TEST0101.docx"),
+        )
+        self.assertEqual(
+            module_paths["anexo_iv"],
+            str(Path("output") / "TEST0101" / "Anexos IV" / "anexoIV_MF0001_1_TEST0101.docx"),
+        )
+        self.assertEqual(
+            module_paths["anexo_v"],
+            str(Path("output") / "TEST0101" / "Anexos V" / "anexoV_MF0001_1_TEST0101.docx"),
+        )
+
     def test_process_pdf_groups_annexes_by_folder(self):
         payload = DocumentPayload(
             data=BasicData(codigo="TEST0101"),
