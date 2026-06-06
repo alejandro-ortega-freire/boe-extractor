@@ -238,8 +238,8 @@ def add_module_rows(table, modules, widths, e_count, schedule):
         set_final_summary_cells(table.rows[-1], e_count)
 
 
-def add_anexo_vi_table(doc, modules, schedule=None):
-    add_title(doc, "INFORME DE EVALUACIÓN INDIVIDUALIZADO")
+def add_anexo_vi_table(doc, modules, schedule=None, title_text="INFORME DE EVALUACIÓN INDIVIDUALIZADO"):
+    add_title(doc, title_text)
 
     e_count = max_evaluable_count(modules)
     column_count = e_count + 8

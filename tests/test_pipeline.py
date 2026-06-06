@@ -33,6 +33,7 @@ class PipelineTests(unittest.TestCase):
                 patch("source.pipeline.create_info_docx"),
                 patch("source.pipeline.create_anexo_iii_docx"),
                 patch("source.pipeline.create_anexo_vi_docx"),
+                patch("source.pipeline.create_anexo_vii_docx"),
                 patch("source.pipeline.create_anexo_iv_docx"),
                 patch("source.pipeline.create_anexo_v_docx"),
             ):
@@ -43,11 +44,13 @@ class PipelineTests(unittest.TestCase):
             anexo_iv_folder = certificate_folder / "Anexos IV"
             anexo_v_folder = certificate_folder / "Anexos V"
             anexo_vi_folder = certificate_folder / "Anexo VI"
+            anexo_vii_folder = certificate_folder / "Anexo VII"
 
             self.assertTrue(anexo_iii_folder.is_dir())
             self.assertTrue(anexo_iv_folder.is_dir())
             self.assertTrue(anexo_v_folder.is_dir())
             self.assertTrue(anexo_vi_folder.is_dir())
+            self.assertTrue(anexo_vii_folder.is_dir())
             self.assertIn(
                 str(anexo_iii_folder / "anexoIII_TEST0101.docx"),
                 generated_files,
@@ -62,6 +65,10 @@ class PipelineTests(unittest.TestCase):
             )
             self.assertIn(
                 str(anexo_vi_folder / "anexoVI_TEST0101.docx"),
+                generated_files,
+            )
+            self.assertIn(
+                str(anexo_vii_folder / "anexoVII_TEST0101.docx"),
                 generated_files,
             )
 
