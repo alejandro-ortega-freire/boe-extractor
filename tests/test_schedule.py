@@ -84,9 +84,9 @@ class ScheduleTests(unittest.TestCase):
         with patch("builtins.input", return_value="n"):
             self.assertFalse(prompt_copy_subcriteria())
 
-    def test_student_count_defaults_to_twenty(self):
+    def test_student_count_defaults_to_sixteen(self):
         with patch("builtins.input", return_value=""):
-            self.assertEqual(prompt_student_count(), 20)
+            self.assertEqual(prompt_student_count(), 16)
 
     def test_student_count_accepts_value_in_range(self):
         with patch("builtins.input", return_value="24"):
@@ -94,7 +94,7 @@ class ScheduleTests(unittest.TestCase):
 
     def test_student_count_rejects_out_of_range_value(self):
         with patch("builtins.input", return_value="101"):
-            self.assertEqual(prompt_student_count(), 20)
+            self.assertEqual(prompt_student_count(), 16)
 
     def test_training_center_defaults_when_not_requested(self):
         with patch("builtins.input", return_value=""):

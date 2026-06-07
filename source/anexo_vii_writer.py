@@ -1,14 +1,27 @@
 from docx import Document
 from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt
 
-from source.anexo_iii_writer import add_anexo_header, certificate_modules, configure_anexo_section
+from source.anexo_iii_writer import (
+    add_anexo_header,
+    certificate_modules,
+    configure_anexo_section,
+    title_without_hours,
+)
 from source.docx_styles import ANEXO_FONT_SIZE, ANEXO_III_HEADER_FILL, ANEXO_III_TABLE_WIDTH_PERCENT
 from source.docx_table_helpers import RED, WHITE, add_title, apply_table_borders, set_cell_runs_color
 from source.schedule import code_from_text
 from source.settings import DEFAULT_STUDENT_COUNT, DEFAULT_TEACHER_NAME
-from source.table_styles import set_cell_shading, set_cell_text, set_exact_row_height, set_table_width_percent
+from source.table_styles import (
+    set_cell_shading,
+    set_cell_text,
+    set_exact_row_height,
+    set_minimum_row_height,
+    set_table_width_percent,
+)
 
 
 def module_code(module):
@@ -28,6 +41,10 @@ def item_code(item):
 
 def module_header_text(module, number):
     return f"MF {number}\n({module_code(module)})"
+
+
+def module_signature_name(module):
+    return f"({title_without_hours(module_text(module))})"
 
 
 def uf_header_text(uf, number):
@@ -249,6 +266,135 @@ def add_anexo_vii_table(doc, modules, student_count=DEFAULT_STUDENT_COUNT):
     return table
 
 
+def add_signature_cell(cell, module, number, teacher_name):
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+    cell.text = ""
+
+    lines = [
+        (f"MF{number}", True),
+        (module_signature_name(module), False),
+        ("", False),
+        ("Formador/a:", True),
+        (teacher_name, False),
+        ("", False),
+        ("Firma:", True),
+        ("", False),
+        ("", False),
+        ("", False),
+    ]
+
+    for line_index, (text, bold) in enumerate(lines):
+        paragraph = cell.paragraphs[0] if line_index == 0 else cell.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        paragraph.paragraph_format.space_before = Pt(0)
+        paragraph.paragraph_format.space_after = Pt(0)
+        run = paragraph.add_run(text)
+        run.bold = bold
+        run.font.size = Pt(ANEXO_FONT_SIZE)
+
+
+def estimated_wrapped_lines(text, chars_per_line):
+    lines = 0
+
+    for part in str(text or "").splitlines() or [""]:
+        lines += max(1, (len(part) + chars_per_line - 1) // chars_per_line)
+
+    return lines
+
+
+def signature_row_height(modules, teacher_name):
+    module_count = max(1, len(modules))
+    chars_per_line = max(16, 42 - (module_count * 3))
+    longest_module_lines = max(
+        estimated_wrapped_lines(module_signature_name(module), chars_per_line)
+        for module in modules
+    )
+    teacher_lines = estimated_wrapped_lines(teacher_name, chars_per_line)
+    fixed_lines = 1 + 1 + 1 + 1 + 3
+    total_lines = longest_module_lines + teacher_lines + fixed_lines
+
+    return Cm(max(4.2, total_lines * 0.42))
+
+
+def add_responsible_signature_cell(cell):
+    cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+    cell.text = ""
+
+    lines = [
+        ("Responsable/Dirección", WD_ALIGN_PARAGRAPH.CENTER, True),
+        ("", WD_ALIGN_PARAGRAPH.LEFT, False),
+        ("Firma:", WD_ALIGN_PARAGRAPH.LEFT, True),
+        ("", WD_ALIGN_PARAGRAPH.LEFT, False),
+        ("", WD_ALIGN_PARAGRAPH.LEFT, False),
+        ("", WD_ALIGN_PARAGRAPH.LEFT, False),
+    ]
+
+    for line_index, (text, align, bold) in enumerate(lines):
+        paragraph = cell.paragraphs[0] if line_index == 0 else cell.add_paragraph()
+        paragraph.alignment = align
+        paragraph.paragraph_format.space_before = Pt(0)
+        paragraph.paragraph_format.space_after = Pt(0)
+        run = paragraph.add_run(text)
+        run.bold = bold
+        run.font.size = Pt(ANEXO_FONT_SIZE)
+
+
+def hide_cell_borders(cell):
+    tc_pr = cell._tc.get_or_add_tcPr()
+    borders = tc_pr.first_child_found_in("w:tcBorders")
+
+    if borders is None:
+        borders = OxmlElement("w:tcBorders")
+        tc_pr.append(borders)
+
+    for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        border = borders.find(qn(f"w:{border_name}"))
+
+        if border is None:
+            border = OxmlElement(f"w:{border_name}")
+            borders.append(border)
+
+        border.set(qn("w:val"), "nil")
+
+
+def add_anexo_vii_signature_table(doc, modules, teacher_name=DEFAULT_TEACHER_NAME):
+    modules = certificate_modules(modules)
+
+    if not modules:
+        return None
+
+    doc.add_paragraph()
+    doc.add_paragraph()
+
+    row_height = signature_row_height(modules, teacher_name)
+    module_width = Inches(1.55)
+    spacer_width = Inches(0.35)
+    responsible_width = Inches(1.65)
+
+    table = doc.add_table(rows=1, cols=len(modules) + 2)
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.style = "Table Grid"
+    table.autofit = False
+    set_table_width_percent(table, ANEXO_III_TABLE_WIDTH_PERCENT)
+    set_minimum_row_height(table.rows[0], row_height)
+
+    for index, module in enumerate(modules):
+        table.rows[0].cells[index].width = module_width
+        add_signature_cell(table.rows[0].cells[index], module, index + 1, teacher_name)
+
+    spacer_cell = table.rows[0].cells[len(modules)]
+    spacer_cell.width = spacer_width
+    spacer_cell.text = ""
+    hide_cell_borders(spacer_cell)
+
+    responsible_cell = table.rows[0].cells[-1]
+    responsible_cell.width = responsible_width
+    add_responsible_signature_cell(responsible_cell)
+    apply_table_borders(table)
+    hide_cell_borders(spacer_cell)
+    return table
+
+
 def create_anexo_vii_docx(
     data,
     modules,
@@ -276,6 +422,7 @@ def create_anexo_vii_docx(
         training_center=training_center,
     )
     add_anexo_vii_table(doc, modules, student_count=student_count)
+    add_anexo_vii_signature_table(doc, modules, teacher_name=teacher_name)
 
     from source.docx_utils import add_header_footer
 

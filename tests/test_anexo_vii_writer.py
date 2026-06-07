@@ -43,9 +43,16 @@ class AnexoVIIWriterTests(unittest.TestCase):
             paragraph_texts = [paragraph.text for paragraph in doc.paragraphs]
             text = "\n".join(paragraph_texts)
             table = doc.tables[0]
+            signature_table = doc.tables[1]
             table_text = "\n".join(cell.text for row in table.rows for cell in row.cells)
+            signature_table_text = "\n".join(
+                cell.text
+                for row in signature_table.rows
+                for cell in row.cells
+            )
 
         self.assertEqual(doc.sections[0].orientation, WD_ORIENT.LANDSCAPE)
+        self.assertEqual(len(doc.tables), 2)
         self.assertIn("ANEXO VII", text)
         self.assertIn("Acta de Evaluación", text)
         self.assertIn("ACTA DE EVALUACIÓN", text)
@@ -110,6 +117,38 @@ class AnexoVIIWriterTests(unittest.TestCase):
         self.assertNotIn("ANEXO VI", paragraph_texts)
         self.assertNotIn("Informe de Evaluación Individualizado", text)
         self.assertNotIn("INFORME DE EVALUACIÓN INDIVIDUALIZADO", text)
+        self.assertEqual(len(signature_table.columns), 4)
+        self.assertIn("MF1\n(MF0001_1: Módulo con UFs)", signature_table.rows[0].cells[0].text)
+        self.assertIn("MF2\n(MF0002_1: Módulo sin UFs)", signature_table.rows[0].cells[1].text)
+        self.assertIn("Formador/a:", signature_table_text)
+        self.assertIn("Docente", signature_table_text)
+        self.assertIn("Firma:", signature_table_text)
+        self.assertEqual("", signature_table.rows[0].cells[-2].text)
+        self.assertIn("Responsable/Dirección", signature_table.rows[0].cells[-1].text)
+        self.assertIn("Firma:", signature_table.rows[0].cells[-1].text)
+        self.assertNotIn("FIRMA DEL/LA DOCENTE QUE", signature_table_text)
+        self.assertNotIn("MP0001", signature_table_text)
+        self.assertEqual(signature_table.rows[0].height_rule, WD_ROW_HEIGHT_RULE.AT_LEAST)
+        signature_runs = [
+            run
+            for paragraph in signature_table.rows[0].cells[0].paragraphs
+            for run in paragraph.runs
+            if run.text.strip()
+        ]
+        bold_signature_texts = {run.text for run in signature_runs if run.bold}
+        self.assertIn("MF1", bold_signature_texts)
+        self.assertIn("Formador/a:", bold_signature_texts)
+        self.assertIn("Firma:", bold_signature_texts)
+        self.assertNotIn("Docente", bold_signature_texts)
+        responsible_runs = [
+            run
+            for paragraph in signature_table.rows[0].cells[-1].paragraphs
+            for run in paragraph.runs
+            if run.text.strip()
+        ]
+        bold_responsible_texts = {run.text for run in responsible_runs if run.bold}
+        self.assertIn("Responsable/Dirección", bold_responsible_texts)
+        self.assertIn("Firma:", bold_responsible_texts)
 
 
 if __name__ == "__main__":
