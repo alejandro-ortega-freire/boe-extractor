@@ -1,4 +1,5 @@
 import re
+import unicodedata
 
 from source.cleaning import clean_line
 
@@ -19,6 +20,29 @@ def strip_module_hours(module_text):
         module_text,
         flags=re.IGNORECASE
     ).strip()
+
+
+def comparable_module_name(text):
+    text = clean_line(text)
+    text = re.sub(r"^(?:MF\d{4}_\d|MP\d{4})\s*:?", "", text).strip()
+    text = re.sub(r"\(\s*transversal\s*\)", "", text, flags=re.IGNORECASE)
+    text = strip_module_hours(text)
+    text = unicodedata.normalize("NFD", text)
+    text = "".join(char for char in text if unicodedata.category(char) != "Mn")
+    text = re.sub(r"[^a-z0-9]+", " ", text.lower())
+    return clean_line(text)
+
+
+def replace_module_code(text, code):
+    if not code:
+        return clean_line(text)
+
+    return re.sub(
+        r"^\s*(MF\d{4}_\d|MP\d{4})",
+        code,
+        clean_line(text),
+        count=1
+    )
 
 
 def extract_hours(text):
@@ -78,11 +102,7 @@ def get_first_value_after_label(lines, label):
     for i, line in enumerate(lines):
         if line.startswith(label):
             value = line.replace(label, "", 1).strip()
-
-            if value:
-                return value
-
-            parts = []
+            parts = [value] if value else []
 
             for next_line in lines[i + 1:i + 6]:
                 next_line = clean_line(next_line)
@@ -419,6 +439,7 @@ def extract_training_modules(text, modules):
     usar en cada campo y mantiene una salida estable para el resto del pipeline.
     """
     parsed_by_code = parse_training_section(text)
+    unused_parsed_codes = set(parsed_by_code)
     result = []
 
     for module in modules:
@@ -431,6 +452,23 @@ def extract_training_modules(text, modules):
         code = code_match.group(1) if code_match else ""
 
         parsed = parsed_by_code.get(code, {})
+        parsed_code = code if parsed else ""
+
+        if parsed:
+            unused_parsed_codes.discard(code)
+        else:
+            module_name = comparable_module_name(module_text)
+
+            for candidate_code in list(unused_parsed_codes):
+                candidate = parsed_by_code[candidate_code]
+                candidate_name = comparable_module_name(candidate.get("denomination", ""))
+
+                if module_name and candidate_name and module_name == candidate_name:
+                    parsed = candidate
+                    parsed_code = candidate_code
+                    unused_parsed_codes.discard(candidate_code)
+                    break
+
         hours = extract_hours(module_text) or parsed.get("duration", "")
 
         ufs = parsed.get("ufs", [])
@@ -443,12 +481,52 @@ def extract_training_modules(text, modules):
 
         ufs = [uf for uf in ufs if valid_uf(uf)]
 
+        corrected_module_text = module_text
+
+        if parsed_code and parsed_code != code:
+            corrected_module_text = replace_module_code(module_text, parsed_code)
+
         result.append({
-            "identifier": strip_module_hours(module_text),
+            "identifier": strip_module_hours(corrected_module_text),
             "hours": hours,
             "objective": parsed.get("objective", ""),
             "criteria": parsed.get("criteria", []),
+            "source_code": parsed_code or code,
+            "summary_code": code,
             "ufs": ufs
         })
 
     return result
+
+
+def module_code_corrections(training_modules):
+    corrections = {}
+
+    for module in training_modules or []:
+        summary_code = module.get("summary_code", "")
+        source_code = module.get("source_code", "")
+
+        if summary_code and source_code and summary_code != source_code:
+            corrections[summary_code] = source_code
+
+    return corrections
+
+
+def apply_module_code_corrections(modules, corrections):
+    if not corrections:
+        return modules
+
+    corrected = []
+
+    for module in modules or []:
+        module = dict(module)
+        text = module.get("text", "")
+
+        for wrong_code, correct_code in corrections.items():
+            if re.match(rf"^{re.escape(wrong_code)}\b", text):
+                module["text"] = replace_module_code(text, correct_code)
+                break
+
+        corrected.append(module)
+
+    return corrected

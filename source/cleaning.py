@@ -3,6 +3,8 @@ import re
 
 WEEKDAY_PATTERN = r"(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)"
 MONTH_PATTERN = r"(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)"
+BULLET_MARKERS = "-–—○□■▫▪◦‣∙\uf0a7"
+BULLET_MARKER_PATTERN = re.compile(rf"^[{re.escape(BULLET_MARKERS)}]\s*")
 
 
 def strip_boe_inline_noise(text):

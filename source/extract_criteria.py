@@ -1,7 +1,7 @@
 import re
 import fitz
 
-from source.cleaning import clean_line, is_boe_noise
+from source.cleaning import BULLET_MARKERS, clean_line, is_boe_noise
 
 
 CONTROL_BULLET_PREFIX = "\x02\x03"
@@ -97,7 +97,7 @@ def normalize_raw_criteria_line(text):
         has_marker = True
         text = text[len(CONTROL_BULLET_PREFIX):].strip()
 
-    text = re.sub(r"^[-–—○□▫▪◦‣∙\uf0a7]\s*", "", text).strip()
+    text = re.sub(rf"^[{re.escape(BULLET_MARKERS)}]\s*", "", text).strip()
     text = normalize_ce_code(text)
     return clean_line(text), has_marker
 
@@ -427,7 +427,7 @@ def merge_geometric_criteria(training_modules, criteria_by_module):
         if not mf_match:
             continue
 
-        mf_code = mf_match.group(0)
+        mf_code = module.get("source_code") or mf_match.group(0)
         module_criteria = criteria_by_module.get(mf_code, {})
 
         if not module_criteria:

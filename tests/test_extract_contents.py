@@ -52,6 +52,36 @@ class ExtractContentsTests(unittest.TestCase):
             ],
         )
 
+    def test_black_square_markers_become_sibling_child_bullets(self):
+        target = []
+        state = reset_content_state()
+
+        lines = [
+            {
+                "text": "3. Marco jurídico y contratación en el comercio e intermediación comercial.",
+                "x0": 117.2,
+            },
+            {
+                "text": "- Concepto y normas que rigen el comercio en el contexto jurídico:",
+                "x0": 153.2,
+            },
+            {
+                "text": "■ Comercio interior ■ Comercio internacional",
+                "x0": 180.2,
+            },
+        ]
+
+        for line in lines:
+            state = parse_content_line(line, target, state)
+
+        parent = target[0]["bullets"][0]
+
+        self.assertEqual(parent["text"], "Concepto y normas que rigen el comercio en el contexto jurídico:")
+        self.assertEqual(
+            [child["text"] for child in parent["children"]],
+            ["Comercio interior", "Comercio internacional"],
+        )
+
     def test_mamd0309_uf1185_uf1186_uf1187_have_contents(self):
         require_pdf(self, MAMD0309_PDF)
         payload = payload_for("MAMD0309.pdf")

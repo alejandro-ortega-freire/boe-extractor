@@ -1,15 +1,12 @@
 import re
 from copy import deepcopy
 
-from source.cleaning import clean_line, dedupe_list
+from source.cleaning import BULLET_MARKER_PATTERN, clean_line, dedupe_list
 
 
 XML_INVALID_PATTERN = re.compile(
     r"[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]"
 )
-
-BULLET_MARKER_PATTERN = re.compile(r"^[-–—○□▫▪◦‣∙\uf0a7]\s*")
-
 
 def normalize_text(value):
     if value is None:

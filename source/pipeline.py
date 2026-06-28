@@ -18,7 +18,11 @@ from source.modules import calculate_certificate_duration, extract_modules
 from source.models import DocumentPayload
 from source.normalization import normalize_document_payload
 from source.schedule import calculate_schedule
-from source.training_section import extract_training_modules
+from source.training_section import (
+    apply_module_code_corrections,
+    extract_training_modules,
+    module_code_corrections,
+)
 from source.docx_utils import add_header_footer
 from source.word_writer import create_anexo_iii_docx, create_info_docx
 
@@ -77,6 +81,10 @@ def build_payload(pdf_path):
     duration_text = calculate_certificate_duration(modules)
 
     training_modules = extract_training_modules(text, modules)
+    modules = apply_module_code_corrections(
+        modules,
+        module_code_corrections(training_modules)
+    )
 
     criteria_by_module = extract_criteria_geometric(pdf_path)
     training_modules = merge_geometric_criteria(

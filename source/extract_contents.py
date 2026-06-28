@@ -1,7 +1,7 @@
 import fitz
 import re
 
-from source.cleaning import clean_line, is_boe_noise
+from source.cleaning import BULLET_MARKERS, clean_line, is_boe_noise
 from source.extract_criteria import (
     extract_mf_code,
     extract_uf_code,
@@ -79,7 +79,17 @@ def get_content_heading_match(text):
 
 
 def get_bullet_match(text):
-    return re.match(r"^([-–—○□▫▪◦‣∙\uf0a7])\s*(.*)", text)
+    return re.match(rf"^([{re.escape(BULLET_MARKERS)}])\s*(.*)", text)
+
+
+def split_embedded_bullet_items(text):
+    parts = [
+        clean_line(part)
+        for part in re.split(rf"\s+[{re.escape(BULLET_MARKERS)}]\s+", text)
+        if clean_line(part)
+    ]
+
+    return parts if len(parts) > 1 else []
 
 
 def normalize_raw_content_line(text):
@@ -90,7 +100,7 @@ def normalize_raw_content_line(text):
         has_marker = True
         text = text[len(CONTROL_BULLET_PREFIX):].strip()
 
-    text = re.sub(r"^[-–—○□▫▪◦‣∙\uf0a7]\s*", "", text).strip()
+    text = re.sub(rf"^[{re.escape(BULLET_MARKERS)}]\s*", "", text).strip()
     return clean_line(text), has_marker
 
 
@@ -327,6 +337,14 @@ def parse_content_line(line, target, state):
         bullet_text = bullet_match.group(2).strip() if bullet_match else text
 
         if not bullet_text or state["current_content"] is None:
+            return state
+
+        embedded_items = split_embedded_bullet_items(bullet_text)
+
+        if embedded_items:
+            for item in embedded_items:
+                add_bullet_by_indent(state, item, x0)
+
             return state
 
         add_bullet_by_indent(state, bullet_text, x0)
@@ -685,7 +703,7 @@ def merge_geometric_contents(training_modules, contents_by_module):
         if not mf_match:
             continue
 
-        mf_code = mf_match.group(0)
+        mf_code = module.get("source_code") or mf_match.group(0)
         module_contents = contents_by_module.get(mf_code, {})
 
         if not module_contents:
